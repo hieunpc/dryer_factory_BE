@@ -1,0 +1,477 @@
+{
+  "info": {
+    "_postman_id": "8d0b59c2-1f96-4cd7-8c68-ffaf7a540001",
+    "name": "Dryer Factory API",
+    "description": "Collection for Dryer Factory backend (PostgreSQL + MQTT). Login request saves access_token to collection variable token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "apiPrefix", "value": "api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "adminEmail", "value": "admin@gmail.com" },
+    { "key": "adminPassword", "value": "123456" },
+    { "key": "operatorEmail", "value": "operator@gmail.com" },
+    { "key": "operatorPassword", "value": "123456" },
+    { "key": "dryerId", "value": "1" },
+    { "key": "sensorId", "value": "2" },
+    { "key": "controlId", "value": "1" },
+    { "key": "batchId", "value": "" },
+    { "key": "recipeId", "value": "1" },
+    { "key": "fruitId", "value": "1" },
+    { "key": "policyId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 - Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login success', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body && body.data && body.data.access_token) {",
+                  "  pm.collectionVariables.set('token', body.data.access_token);",
+                  "}",
+                  "if (body && body.data && body.data.user && body.data.user.app_user_id) {",
+                  "  pm.collectionVariables.set('adminUserId', String(body.data.user.app_user_id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Structure",
+      "item": [
+        {
+          "name": "GET /api/v1/factories",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/factories",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "factories"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/areas?fac_id=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/areas?fac_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "areas"],
+              "query": [{ "key": "fac_id", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/dryers?area_id=1",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/dryers?area_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "dryers"],
+              "query": [{ "key": "area_id", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/dryers/{{dryerId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/dryers/{{dryerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Device",
+      "item": [
+        {
+          "name": "PATCH /api/v1/sensors/{{sensorId}} (threshold)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 0.1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/sensors/{{sensorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "sensors", "{{sensorId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/sensors/{{sensorId}}/latest",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/sensors/{{sensorId}}/latest",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "sensors", "{{sensorId}}", "latest"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/controls/{{controlId}}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/controls/{{controlId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "controls", "{{controlId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Catalog",
+      "item": [
+        {
+          "name": "GET /api/v1/fruits",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/fruits",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "fruits"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/recipes?fruit_id={{fruitId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/recipes?fruit_id={{fruitId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "recipes"],
+              "query": [{ "key": "fruit_id", "value": "{{fruitId}}" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/recipes/{{recipeId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/recipes/{{recipeId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "recipes", "{{recipeId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Batch & Threshold",
+      "item": [
+        {
+          "name": "POST /api/v1/batches (create)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body && body.data && body.data.batch_id) {",
+                  "  pm.collectionVariables.set('batchId', String(body.data.batch_id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dry_id\": {{dryerId}},\n  \"fruit_id\": {{fruitId}},\n  \"recipe_id\": {{recipeId}},\n  \"operation_mode\": \"scheduled\",\n  \"threshold_enabled\": true,\n  \"is_customize\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/start",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/sensor-data",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sensor_id\": {{sensorId}},\n  \"value\": 120\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/sensor-data",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "sensor-data"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/logs?batch_id={{batchId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/logs?batch_id={{batchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "logs"],
+              "query": [{ "key": "batch_id", "value": "{{batchId}}" }]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"final_status\": \"completed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/stop",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "stop"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Monitoring & Dashboard",
+      "item": [
+        {
+          "name": "GET /api/v1/dashboard/overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/dashboard/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "dashboard", "overview"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/dashboard/charts/temperature-humidity",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/dashboard/charts/temperature-humidity?batch_id={{batchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "dashboard", "charts", "temperature-humidity"],
+              "query": [{ "key": "batch_id", "value": "{{batchId}}" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/reports/operations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/reports/operations",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "reports", "operations"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/reports/export",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"report_type\": \"operations\",\n  \"file_format\": \"xlsx\",\n  \"filters\": {\n    \"from\": \"2026-04-01T00:00:00Z\",\n    \"to\": \"2026-04-30T23:59:59Z\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/reports/export",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "reports", "export"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Admin Users",
+      "item": [
+        {
+          "name": "GET /api/v1/users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/users",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"app_user_name\": \"Frontend Tester\",\n  \"email\": \"frontend.tester@example.com\",\n  \"password\": \"123456\",\n  \"is_admin\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "users"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

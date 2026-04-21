@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dryer-factory-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: factorydb
+      POSTGRES_USER: factory
+      POSTGRES_PASSWORD: factory123
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+
+volumes:
+  pgdata:
