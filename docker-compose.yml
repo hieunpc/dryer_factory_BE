@@ -1,12 +1,12 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: dryer-factory-postgres
+    container_name: dryer-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: factorydb
-      POSTGRES_USER: factory
-      POSTGRES_PASSWORD: factory123
+      POSTGRES_DB: dryerdb
+      POSTGRES_USER: dryer
+      POSTGRES_PASSWORD: dryer123
     ports:
       - "55432:5432"
     volumes:

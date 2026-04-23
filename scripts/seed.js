@@ -5,9 +5,9 @@ const { Pool } = require("pg");
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
   port: Number(process.env.DB_PORT) || 55432,
-  database: process.env.DB_NAME || "factorydb",
-  user: process.env.DB_USER || "factory",
-  password: process.env.DB_PASSWORD || "factory123",
+  database: process.env.DB_NAME || "dryerdb",
+  user: process.env.DB_USER || "dryer",
+  password: process.env.DB_PASSWORD || "dryer123",
 });
 
 async function seed() {
@@ -33,21 +33,12 @@ async function seed() {
       ["Operator A", "operator@gmail.com", hash2, false]
     );
 
-    // Factory
-    const fac = await client.query(
-      `INSERT INTO Factory (fac_name) VALUES ('Nha may say Binh Duong')
-       RETURNING fac_id`
-    );
-    const facId = fac.rows[0].fac_id;
-
     // Areas
     const areaA = await client.query(
-      `INSERT INTO Area (area_name, fac_id) VALUES ('Khu vuc A', $1) RETURNING area_id`,
-      [facId]
+      `INSERT INTO Area (area_name) VALUES ('Khu vuc A') RETURNING area_id`
     );
     const areaB = await client.query(
-      `INSERT INTO Area (area_name, fac_id) VALUES ('Khu vuc B', $1) RETURNING area_id`,
-      [facId]
+      `INSERT INTO Area (area_name) VALUES ('Khu vuc B') RETURNING area_id`
     );
     const areaIdA = areaA.rows[0].area_id;
     const areaIdB = areaB.rows[0].area_id;
@@ -179,11 +170,11 @@ async function seed() {
       );
     }
 
-    // Scope: grant operator access to factory
+    // Scope: grant operator access to area A
     await client.query(
-      `INSERT INTO user_scope (app_user_id, fac_id)
+      `INSERT INTO user_scope (app_user_id, area_id)
        VALUES (2, $1)`,
-      [facId]
+      [areaIdA]
     );
 
     await client.query("COMMIT");

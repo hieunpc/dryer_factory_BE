@@ -17,9 +17,9 @@ function ensureEnum(value, values, fieldName) {
 }
 
 function ensureOneScope(body) {
-  const keys = ["fac_id", "area_id", "dry_id"].filter((k) => body[k] != null);
+  const keys = ["area_id", "dry_id"].filter((k) => body[k] != null);
   if (keys.length !== 1) {
-    throw new HttpError(400, "VALIDATION_ERROR", "Exactly one of fac_id, area_id, dry_id is required");
+    throw new HttpError(400, "VALIDATION_ERROR", "Exactly one of area_id, dry_id is required");
   }
 }
 

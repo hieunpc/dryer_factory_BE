@@ -17,7 +17,7 @@ Cac buoc setup nhanh:
 
 ## 2. Import Postman
 
-- File collection: postman/Dryer-Factory-API.postman_collection.json
+- File collection: postman collection (.json)
 - Sau khi import, chay request login truoc de luu token vao bien token.
 
 Thu tu chay khuyen nghi:
@@ -42,10 +42,9 @@ Dung cho:
 - Header profile
 - Kiem tra role user/admin
 
-### 3.2. Cay nha may (Factory/Area/Dryer)
+### 3.2. Cay cau truc (Area/Dryer)
 
-- GET /api/v1/factories
-- GET /api/v1/areas?fac_id=
+- GET /api/v1/areas
 - GET /api/v1/dryers?area_id=
 - GET /api/v1/dryers/:id
 

@@ -1,4 +1,4 @@
-# API DOCUMENTATION: DRYING FACTORY MANAGEMENT SYSTEM (V2)
+# API DOCUMENTATION: DRYER MANAGEMENT SYSTEM (V2)
 
 Base URL: /api/v1  
 Format: JSON  
@@ -15,9 +15,8 @@ Hệ thống có 2 vai trò:
 - User: vận hành mẻ sấy và theo dõi trong phạm vi được cấp.
 - Admin: toàn quyền User + quản trị danh mục, thiết bị, quyền truy cập, report toàn hệ thống.
 
-Phạm vi truy cập dữ liệu dùng bảng user_scope theo một trong 3 mức:
+Phạm vi truy cập dữ liệu dùng bảng user_scope theo một trong 2 mức:
 
-- Factory scope
 - Area scope
 - Dryer scope
 
@@ -124,19 +123,18 @@ Mô tả: Cập nhật tên, trạng thái active, hoặc đổi role.
 ### POST /users/{id}/scopes
 
 Role: [ADMIN]  
-Mô tả: Gán phạm vi truy cập (factory hoặc area hoặc dryer).
+Mô tả: Gán phạm vi truy cập (area hoặc dryer).
 
 Request:
 
 {
-"fac_id": null,
 "area_id": 2,
 "dry_id": null
 }
 
 Lưu ý:
 
-- Chỉ được truyền đúng 1 trong 3 trường fac_id, area_id, dry_id.
+- Chỉ được truyền đúng 1 trong 2 trường area_id, dry_id.
 - Nếu user là Admin thì scope có thể bỏ qua khi truy vấn.
 
 ### GET /users/{id}/scopes
@@ -151,26 +149,12 @@ Mô tả: Thu hồi một scope của user.
 
 ---
 
-## 5. Factory Structure
-
-### GET /factories
-
-Role: [USER]  
-Mô tả: Lấy danh sách nhà máy theo quyền truy cập.
-
-### POST /factories
-
-Role: [ADMIN]  
-Mô tả: Tạo nhà máy.
+## 5. Structure
 
 ### GET /areas
 
 Role: [USER]  
-Query:
-
-- fac_id
-
-Mô tả: Lấy danh sách khu vực theo nhà máy và quyền truy cập.
+Mô tả: Lấy danh sách khu vực theo quyền truy cập.
 
 ### POST /areas
 
@@ -180,8 +164,7 @@ Mô tả: Tạo khu vực mới.
 Request:
 
 {
-"area_name": "Area A",
-"fac_id": 1
+"area_name": "Area A"
 }
 
 ### GET /dryers
@@ -555,7 +538,6 @@ Các endpoint dưới đây phục vụ UI dashboard trực quan cho Admin/User.
 Role: [USER]  
 Query:
 
-- fac_id
 - area_id
 - dry_id
 - from
@@ -669,7 +651,7 @@ Mô tả: Tải file export nếu thuộc quyền truy cập của người gọ
 ## 15. Mapping nhanh API với bảng dữ liệu
 
 - auth/users/scopes: app_user, user_scope
-- factory structure: Factory, Area, Dryer
+- structure: Area, Dryer
 - devices: sensor_device, sensor_latest, control_device
 - fruits/recipes/phases: fruit, recipe, phase
 - policies: policy, policy_condition, policy_action

@@ -15,7 +15,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 
 app.get("/health", (_req, res) => {
-  res.json({ status: "success", data: { service: "dryer-factory-be", uptime: process.uptime() } });
+  res.json({ status: "success", data: { service: "dryer-be", uptime: process.uptime() } });
 });
 
 app.use("/api/v1", apiRoutes);

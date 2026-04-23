@@ -119,7 +119,7 @@ Hệ thống có 2 vai trò chính: **User** và **Admin**.
 ### 8.2. Admin
 
 - Có toàn bộ quyền của User.
-- Quản lý người dùng, vai trò và phạm vi truy cập (factory/area/dryer).
+- Quản lý người dùng, vai trò và phạm vi truy cập (area/dryer).
 - Quản lý danh mục hệ thống: loại trái cây, công thức sấy, policy, lịch trình mẫu.
 - Cấu hình thiết bị trên máy sấy (sensor, quạt, đèn), bao gồm nhiều thiết bị cùng loại.
 - Thiết lập ngưỡng an toàn, quy tắc cảnh báo, luật tự động hóa.
@@ -194,7 +194,7 @@ flowchart TD
   System --> Report
   System --> AuditLog
 
-  Factory --> Area
+  System --> Area
   Area --> Dryer
   Dryer --> Sensor
   Dryer --> OutputDevice

@@ -19,7 +19,7 @@ router.use(authenticate);
 // User management
 router.use("/users", userRoutes);
 
-// Factory structure (factories, areas, dryers, sensors, controls)
+// Structure (areas, dryers, sensors, controls)
 router.use("/", structureRoutes);
 
 // Catalog (fruits, recipes, phases, policies)

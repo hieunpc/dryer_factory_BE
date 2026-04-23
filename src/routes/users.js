@@ -73,10 +73,10 @@ router.post(
     const userId = Number(req.params.id);
     ensureOneScope(req.body);
     const result = await query(
-      `INSERT INTO user_scope (app_user_id, fac_id, area_id, dry_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING scope_id, app_user_id, fac_id, area_id, dry_id`,
-      [userId, req.body.fac_id ?? null, req.body.area_id ?? null, req.body.dry_id ?? null]
+      `INSERT INTO user_scope (app_user_id, area_id, dry_id)
+       VALUES ($1, $2, $3)
+       RETURNING scope_id, app_user_id, area_id, dry_id`,
+      [userId, req.body.area_id ?? null, req.body.dry_id ?? null]
     );
     await writeLog({ logStyle: "audit_permission_change", message: `Admin ${req.user.email} granted scope to user ${userId}`, appUserId: req.user.id });
     return res.status(201).json({ status: "success", data: result.rows[0] });
@@ -88,7 +88,7 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const result = await query(
-      `SELECT scope_id, fac_id, area_id, dry_id FROM user_scope WHERE app_user_id = $1`,
+      `SELECT scope_id, area_id, dry_id FROM user_scope WHERE app_user_id = $1`,
       [Number(req.params.id)]
     );
     return ok(res, result.rows);

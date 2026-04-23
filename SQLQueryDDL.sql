@@ -1,23 +1,13 @@
-CREATE DATABASE FactoryDB;
+CREATE DATABASE DryerDB;
 GO
 
-USE FactoryDB;
+USE DryerDB;
 GO
-
-CREATE TABLE Factory (
-    fac_id INT IDENTITY(1,1) PRIMARY KEY,
-    fac_name NVARCHAR(255) NOT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE()
-);
 
 CREATE TABLE Area (
     area_id INT IDENTITY(1,1) PRIMARY KEY,
     area_name NVARCHAR(255) NOT NULL,
-    fac_id INT NOT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    CONSTRAINT FK_Area_Factory
-        FOREIGN KEY (fac_id)
-        REFERENCES Factory(fac_id)
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE()
 );
 
 CREATE TABLE Dryer (
@@ -160,15 +150,11 @@ CREATE TABLE app_user (
 CREATE TABLE user_scope (
     scope_id INT IDENTITY(1,1) PRIMARY KEY,
     app_user_id INT NOT NULL,
-    fac_id INT NULL,
     area_id INT NULL,
     dry_id INT NULL,
     CONSTRAINT FK_scope_user
         FOREIGN KEY (app_user_id)
         REFERENCES app_user(app_user_id),
-    CONSTRAINT FK_scope_factory
-        FOREIGN KEY (fac_id)
-        REFERENCES Factory(fac_id),
     CONSTRAINT FK_scope_area
         FOREIGN KEY (area_id)
         REFERENCES Area(area_id),
@@ -177,8 +163,7 @@ CREATE TABLE user_scope (
         REFERENCES Dryer(dry_id),
     CONSTRAINT CK_scope_target
         CHECK (
-            (CASE WHEN fac_id IS NULL THEN 0 ELSE 1 END)
-            + (CASE WHEN area_id IS NULL THEN 0 ELSE 1 END)
+            (CASE WHEN area_id IS NULL THEN 0 ELSE 1 END)
             + (CASE WHEN dry_id IS NULL THEN 0 ELSE 1 END) = 1
         )
 );

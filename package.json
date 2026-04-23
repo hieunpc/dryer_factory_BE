@@ -1,5 +1,5 @@
 {
-  "name": "dryer_factory_be",
+  "name": "dryer_be",
   "version": "1.0.0",
   "main": "src/server.js",
   "scripts": {

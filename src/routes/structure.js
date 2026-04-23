@@ -8,61 +8,33 @@ const { getAccessibleDryerIds, ensureDryerAccess, inClauseFromIds } = require(".
 
 const router = express.Router();
 
-// --- Factories ---
-router.get("/factories", asyncHandler(async (req, res) => {
-  if (req.user.isAdmin) {
-    const result = await query(`SELECT fac_id, fac_name, created_at FROM Factory ORDER BY fac_id`);
-    return ok(res, result.rows);
-  }
-  const dryerIds = await getAccessibleDryerIds(req.user);
-  if (!dryerIds.length) return ok(res, []);
-  const result = await query(
-    `SELECT DISTINCT f.fac_id, f.fac_name, f.created_at
-     FROM Factory f JOIN Area a ON a.fac_id = f.fac_id JOIN Dryer d ON d.area_id = a.area_id
-     WHERE d.dry_id IN ${inClauseFromIds(dryerIds)} ORDER BY f.fac_id`
-  );
-  return ok(res, result.rows);
-}));
-
-router.post("/factories", requireAdmin, asyncHandler(async (req, res) => {
-  if (!req.body.fac_name) throw new HttpError(400, "VALIDATION_ERROR", "fac_name is required");
-  const result = await query(
-    `INSERT INTO Factory (fac_name) VALUES ($1) RETURNING fac_id, fac_name, created_at`,
-    [req.body.fac_name]
-  );
-  return res.status(201).json({ status: "success", data: result.rows[0] });
-}));
-
 // --- Areas ---
 router.get("/areas", asyncHandler(async (req, res) => {
-  const facId = req.query.fac_id ? Number(req.query.fac_id) : null;
   if (req.user.isAdmin) {
     const result = await query(
-      `SELECT area_id, area_name, fac_id, created_at FROM Area
-       WHERE ($1::int IS NULL OR fac_id = $1) ORDER BY area_id`,
-      [facId]
+      `SELECT area_id, area_name, created_at FROM Area
+       ORDER BY area_id`
     );
     return ok(res, result.rows);
   }
   const dryerIds = await getAccessibleDryerIds(req.user);
   if (!dryerIds.length) return ok(res, []);
   const result = await query(
-    `SELECT DISTINCT a.area_id, a.area_name, a.fac_id, a.created_at
+    `SELECT DISTINCT a.area_id, a.area_name, a.created_at
      FROM Area a JOIN Dryer d ON d.area_id = a.area_id
      WHERE d.dry_id IN ${inClauseFromIds(dryerIds)}
-       AND ($1::int IS NULL OR a.fac_id = $1) ORDER BY a.area_id`,
-    [facId]
+     ORDER BY a.area_id`
   );
   return ok(res, result.rows);
 }));
 
 router.post("/areas", requireAdmin, asyncHandler(async (req, res) => {
-  const { area_name, fac_id } = req.body;
-  if (!area_name || !fac_id) throw new HttpError(400, "VALIDATION_ERROR", "area_name and fac_id are required");
+  const { area_name } = req.body;
+  if (!area_name) throw new HttpError(400, "VALIDATION_ERROR", "area_name is required");
   const result = await query(
-    `INSERT INTO Area (area_name, fac_id) VALUES ($1, $2)
-     RETURNING area_id, area_name, fac_id, created_at`,
-    [area_name, Number(fac_id)]
+    `INSERT INTO Area (area_name) VALUES ($1)
+     RETURNING area_id, area_name, created_at`,
+    [area_name]
   );
   return res.status(201).json({ status: "success", data: result.rows[0] });
 }));

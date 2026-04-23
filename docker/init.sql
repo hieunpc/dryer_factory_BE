@@ -1,15 +1,8 @@
--- PostgreSQL DDL for Dryer Factory (converted from SQL Server)
-
-CREATE TABLE Factory (
-    fac_id SERIAL PRIMARY KEY,
-    fac_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- PostgreSQL DDL for Dryer system (converted from SQL Server)
 
 CREATE TABLE Area (
     area_id SERIAL PRIMARY KEY,
     area_name VARCHAR(255) NOT NULL,
-    fac_id INT NOT NULL REFERENCES Factory(fac_id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -105,12 +98,10 @@ CREATE TABLE app_user (
 CREATE TABLE user_scope (
     scope_id SERIAL PRIMARY KEY,
     app_user_id INT NOT NULL REFERENCES app_user(app_user_id),
-    fac_id INT REFERENCES Factory(fac_id),
     area_id INT REFERENCES Area(area_id),
     dry_id INT REFERENCES Dryer(dry_id),
     CHECK (
-        (CASE WHEN fac_id IS NULL THEN 0 ELSE 1 END)
-        + (CASE WHEN area_id IS NULL THEN 0 ELSE 1 END)
+        (CASE WHEN area_id IS NULL THEN 0 ELSE 1 END)
         + (CASE WHEN dry_id IS NULL THEN 0 ELSE 1 END) = 1
     )
 );

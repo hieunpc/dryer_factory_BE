@@ -9,7 +9,7 @@ const schema = Joi.object({
 
   DB_HOST: Joi.string().default("localhost"),
   DB_PORT: Joi.number().default(55432),
-  DB_NAME: Joi.string().default("factorydb"),
+  DB_NAME: Joi.string().default("dryerdb"),
   DB_USER: Joi.string().required(),
   DB_PASSWORD: Joi.string().required(),
 

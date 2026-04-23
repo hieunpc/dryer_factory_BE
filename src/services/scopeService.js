@@ -15,12 +15,10 @@ async function getAccessibleDryerIds(user) {
      WHERE EXISTS (
        SELECT 1
        FROM user_scope us
-       JOIN Area a ON a.area_id = d.area_id
        WHERE us.app_user_id = $1
          AND (
            us.dry_id = d.dry_id
            OR us.area_id = d.area_id
-           OR us.fac_id = a.fac_id
          )
      )`,
     [user.id]

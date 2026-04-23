@@ -59,7 +59,7 @@ router.get(
   authenticate,
   asyncHandler(async (req, res) => {
     const scopes = await query(
-      `SELECT scope_id, fac_id, area_id, dry_id FROM user_scope WHERE app_user_id = $1`,
+      `SELECT scope_id, area_id, dry_id FROM user_scope WHERE app_user_id = $1`,
       [req.user.id]
     );
     return ok(res, { user: req.user, scopes: scopes.rows });

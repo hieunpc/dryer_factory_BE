@@ -1,4 +1,4 @@
-# Dryer Factory Backend (Node.js)
+# Dryer Backend (Node.js)
 
 ## Run
 
