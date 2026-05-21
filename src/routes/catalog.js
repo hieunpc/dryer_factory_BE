@@ -45,12 +45,42 @@ router.get("/recipes/:id", asyncHandler(async (req, res) => {
   );
   const recipe = recipeResult.rows[0];
   if (!recipe) throw new HttpError(404, "NOT_FOUND", "Recipe not found");
-  const phases = await query(
-    `SELECT phase_id, phase_order, duration_seconds, humidity, temperature
+  const phasesResult = await query(
+    `SELECT phase_id, phase_order, duration_seconds, humidity, temperature, light
      FROM phase WHERE recipe_id = $1 ORDER BY phase_order`,
     [recipeId]
   );
-  return ok(res, { ...recipe, phases: phases.rows });
+  const phases = phasesResult.rows;
+  const phaseIds = phases.map((phase) => phase.phase_id);
+  let phaseActions = [];
+  if (phaseIds.length) {
+    const tableExists = await query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'phase_actions' LIMIT 1`
+    );
+    if (tableExists.rows.length) {
+      phaseActions = (await query(
+        `SELECT pa.action_id, pa.phase_id, pa.control_id, pa.action_type, pa.start_offset_seconds,
+                pa.duration_seconds, cd.control_name, cd.control_type
+         FROM phase_actions pa
+         JOIN control_device cd ON pa.control_id = cd.control_id
+         WHERE pa.phase_id = ANY($1::int[])
+         ORDER BY pa.phase_id, pa.start_offset_seconds`,
+        [phaseIds]
+      )).rows;
+    }
+  }
+  const actionsByPhase = phaseActions.reduce((acc, action) => {
+    if (!acc[action.phase_id]) acc[action.phase_id] = [];
+    acc[action.phase_id].push(action);
+    return acc;
+  }, {});
+  return ok(res, {
+    ...recipe,
+    phases: phases.map((phase) => ({
+      ...phase,
+      actions: actionsByPhase[phase.phase_id] || [],
+    })),
+  });
 }));
 
 router.post("/recipes", requireAdmin, asyncHandler(async (req, res) => {
@@ -68,10 +98,13 @@ router.post("/recipes", requireAdmin, asyncHandler(async (req, res) => {
     );
     const recipe = recipeInsert.rows[0];
     for (const phase of phases) {
+      const phaseLight = phase.light == null ? null : Number(phase.light);
+      const phaseHumidity = phase.humidity == null ? null : Number(phase.humidity);
+      const phaseTemperature = phase.temperature == null ? null : Number(phase.temperature);
       await client.query(
-        `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [Number(phase.phase_order), recipe.recipe_id, Number(phase.duration_seconds), Number(phase.humidity), Number(phase.temperature)]
+        `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature, light)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [Number(phase.phase_order), recipe.recipe_id, Number(phase.duration_seconds), phaseHumidity, phaseTemperature, phaseLight]
       );
     }
     await client.query("COMMIT");
@@ -106,10 +139,13 @@ router.put("/recipes/:id/phases", requireAdmin, asyncHandler(async (req, res) =>
     await client.query("BEGIN");
     await client.query(`DELETE FROM phase WHERE recipe_id = $1`, [recipeId]);
     for (const phase of phases) {
+      const phaseLight = phase.light == null ? null : Number(phase.light);
+      const phaseHumidity = phase.humidity == null ? null : Number(phase.humidity);
+      const phaseTemperature = phase.temperature == null ? null : Number(phase.temperature);
       await client.query(
-        `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [Number(phase.phase_order), recipeId, Number(phase.duration_seconds), Number(phase.humidity), Number(phase.temperature)]
+        `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature, light)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [Number(phase.phase_order), recipeId, Number(phase.duration_seconds), phaseHumidity, phaseTemperature, phaseLight]
       );
     }
     await client.query("COMMIT");
@@ -143,6 +179,14 @@ router.post("/policies", requireAdmin, asyncHandler(async (req, res) => {
   const { policy_name, policy_type, phase_id, is_active = true } = req.body;
   if (!policy_name || !policy_type || !phase_id) {
     throw new HttpError(400, "VALIDATION_ERROR", "policy_name, policy_type and phase_id are required");
+  }
+
+  const phaseCheck = await query(
+    `SELECT phase_id FROM phase WHERE phase_id = $1`,
+    [Number(phase_id)]
+  );
+  if (!phaseCheck.rows.length) {
+    throw new HttpError(404, "NOT_FOUND", "Phase not found");
   }
   const result = await query(
     `INSERT INTO policy (policy_type, policy_name, phase_id, is_active) VALUES ($1, $2, $3, $4)
@@ -186,6 +230,54 @@ router.delete("/policies/:id/actions/:actionId", requireAdmin, asyncHandler(asyn
   await query(`DELETE FROM policy_action WHERE policy_id = $1 AND action_id = $2`,
     [Number(req.params.id), Number(req.params.actionId)]);
   return ok(res, { message: "Action deleted" });
+}));
+
+router.get("/phases/:id/actions", asyncHandler(async (req, res) => {
+  const phaseId = Number(req.params.id);
+  const phaseCheck = await query(`SELECT phase_id FROM phase WHERE phase_id = $1`, [phaseId]);
+  if (!phaseCheck.rows.length) throw new HttpError(404, "NOT_FOUND", "Phase not found");
+  const result = await query(
+    `SELECT pa.action_id, pa.phase_id, pa.control_id, pa.action_type, pa.start_offset_seconds,
+            pa.duration_seconds, cd.control_name, cd.control_type
+     FROM phase_actions pa
+     JOIN control_device cd ON pa.control_id = cd.control_id
+     WHERE pa.phase_id = $1
+     ORDER BY pa.start_offset_seconds`,
+    [phaseId]
+  );
+  return ok(res, result.rows);
+}));
+
+router.post("/phases/:id/actions", requireAdmin, asyncHandler(async (req, res) => {
+  const phaseId = Number(req.params.id);
+  const { control_id, action_type, start_offset_seconds = 0, duration_seconds = null } = req.body;
+  if (!control_id || !action_type) {
+    throw new HttpError(400, "VALIDATION_ERROR", "control_id and action_type are required");
+  }
+  ensureEnum(action_type, ["activate", "deactivate"], "action_type");
+
+  const phaseCheck = await query(`SELECT phase_id FROM phase WHERE phase_id = $1`, [phaseId]);
+  if (!phaseCheck.rows.length) throw new HttpError(404, "NOT_FOUND", "Phase not found");
+
+  const controlCheck = await query(`SELECT control_id FROM control_device WHERE control_id = $1`, [Number(control_id)]);
+  if (!controlCheck.rows.length) throw new HttpError(404, "NOT_FOUND", "Control device not found");
+
+  const result = await query(
+    `INSERT INTO phase_actions (phase_id, control_id, action_type, start_offset_seconds, duration_seconds)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING action_id, phase_id, control_id, action_type, start_offset_seconds, duration_seconds`,
+    [phaseId, Number(control_id), action_type, Number(start_offset_seconds), duration_seconds == null ? null : Number(duration_seconds)]
+  );
+  return res.status(201).json({ status: "success", data: result.rows[0] });
+}));
+
+router.delete("/phases/:id/actions/:actionId", requireAdmin, asyncHandler(async (req, res) => {
+  const phaseId = Number(req.params.id);
+  await query(
+    `DELETE FROM phase_actions WHERE phase_id = $1 AND action_id = $2`,
+    [phaseId, Number(req.params.actionId)]
+  );
+  return ok(res, { message: "Phase action deleted" });
 }));
 
 module.exports = router;

@@ -15,7 +15,7 @@ CREATE TABLE Dryer (
     dry_name NVARCHAR(255) NOT NULL,
     status NVARCHAR(50) NOT NULL
         CONSTRAINT CK_Dryer_Status
-        CHECK (status IN ('Running', 'Idle', 'Maintenance')),
+        CHECK (status IN ('Running', 'Idle', 'Maintenance', 'Stopped')),
     area_id INT NOT NULL,
     created_at DATETIME2 NOT NULL DEFAULT GETDATE(),
     CONSTRAINT FK_Dryer_Area
@@ -85,8 +85,9 @@ CREATE TABLE phase (
     phase_order INT NOT NULL,
     recipe_id INT NOT NULL,
     duration_seconds INT NOT NULL,
-    humidity FLOAT NOT NULL,
-    temperature FLOAT NOT NULL,
+    humidity FLOAT NULL,
+    temperature FLOAT NULL,
+    light FLOAT NULL,
     CONSTRAINT UQ_phase_recipe_order UNIQUE (recipe_id, phase_order),
     CONSTRAINT FK_phase_recipe
         FOREIGN KEY (recipe_id)
@@ -172,14 +173,17 @@ CREATE TABLE batch (
     batch_id INT IDENTITY(1,1) PRIMARY KEY,
     start_time DATETIME2 NULL,
     end_time DATETIME2 NULL,
+    elapsed_seconds INT NOT NULL DEFAULT 0,
     status NVARCHAR(50) NOT NULL
         CONSTRAINT CK_batch_status
-        CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+        CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled', 'aborted')),
     operation_mode NVARCHAR(20) NOT NULL
         CONSTRAINT CK_batch_operation_mode
         CHECK (operation_mode IN ('manual', 'scheduled')),
     threshold_enabled BIT NOT NULL DEFAULT 0,
     is_customize BIT NOT NULL DEFAULT 0,
+    scheduled_delay_seconds INT NULL,
+    scheduled_start_time DATETIME2 NULL,
     dry_id INT NOT NULL,
     fruit_id INT NOT NULL,
     recipe_id INT NOT NULL,

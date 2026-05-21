@@ -9,14 +9,14 @@ CREATE TABLE Area (
 CREATE TABLE Dryer (
     dry_id SERIAL PRIMARY KEY,
     dry_name VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('Running', 'Idle', 'Maintenance')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('Running', 'Idle', 'Maintenance', 'Stopped')),
     area_id INT NOT NULL REFERENCES Area(area_id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE sensor_device (
     sensor_id SERIAL PRIMARY KEY,
-    sensor_type VARCHAR(50) NOT NULL CHECK (sensor_type IN ('humidity', 'temperature', 'door_state')),
+    sensor_type VARCHAR(50) NOT NULL CHECK (sensor_type IN ('humidity', 'temperature', 'door_state', 'light')),
     threshold DOUBLE PRECISION,
     dry_id INT NOT NULL REFERENCES Dryer(dry_id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -56,8 +56,9 @@ CREATE TABLE phase (
     phase_order INT NOT NULL,
     recipe_id INT NOT NULL REFERENCES recipe(recipe_id),
     duration_seconds INT NOT NULL,
-    humidity DOUBLE PRECISION NOT NULL,
-    temperature DOUBLE PRECISION NOT NULL,
+    humidity DOUBLE PRECISION NULL,
+    temperature DOUBLE PRECISION NULL,
+    light DOUBLE PRECISION NULL,
     UNIQUE (recipe_id, phase_order)
 );
 
@@ -110,10 +111,13 @@ CREATE TABLE batch (
     batch_id SERIAL PRIMARY KEY,
     start_time TIMESTAMPTZ,
     end_time TIMESTAMPTZ,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+    elapsed_seconds INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled', 'aborted')),
     operation_mode VARCHAR(20) NOT NULL CHECK (operation_mode IN ('manual', 'scheduled')),
     threshold_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     is_customize BOOLEAN NOT NULL DEFAULT FALSE,
+    scheduled_delay_seconds INTEGER,
+    scheduled_start_time TIMESTAMPTZ,
     dry_id INT NOT NULL REFERENCES Dryer(dry_id),
     fruit_id INT NOT NULL REFERENCES fruit(fruit_id),
     recipe_id INT NOT NULL REFERENCES recipe(recipe_id),
@@ -143,4 +147,13 @@ CREATE TABLE report_export (
     file_format VARCHAR(20) NOT NULL CHECK (file_format IN ('pdf', 'xlsx')),
     filter_json TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE phase_actions (
+    action_id SERIAL PRIMARY KEY,
+    phase_id INT NOT NULL REFERENCES phase(phase_id),
+    control_id INT NOT NULL REFERENCES control_device(control_id),
+    action_type VARCHAR(50) NOT NULL CHECK (action_type IN ('activate', 'deactivate')),
+    start_offset_seconds INT NOT NULL DEFAULT 0,
+    duration_seconds INT NULL
 );

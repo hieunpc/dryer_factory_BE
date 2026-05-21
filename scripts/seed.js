@@ -56,7 +56,11 @@ async function seed() {
       `INSERT INTO Dryer (dry_name, status, area_id) VALUES ('Dryer 03', 'Idle', $1) RETURNING dry_id`,
       [areaIdB]
     );
-    const dryIds = [d1.rows[0].dry_id, d2.rows[0].dry_id, d3.rows[0].dry_id];
+    const d4 = await client.query(
+      `INSERT INTO Dryer (dry_name, status, area_id) VALUES ('Dryer 04', 'Idle', $1) RETURNING dry_id`,
+      [areaIdB]
+    );
+    const dryIds = [d1.rows[0].dry_id, d2.rows[0].dry_id, d3.rows[0].dry_id, d4.rows[0].dry_id];
 
     // Sensors & Controls for each dryer
     for (const dryId of dryIds) {
@@ -66,6 +70,10 @@ async function seed() {
       );
       await client.query(
         `INSERT INTO sensor_device (sensor_type, threshold, dry_id) VALUES ('humidity', 2.0, $1)`,
+        [dryId]
+      );
+      await client.query(
+        `INSERT INTO sensor_device (sensor_type, threshold, dry_id) VALUES ('light', 10.0, $1)`,
         [dryId]
       );
       await client.query(
@@ -80,14 +88,15 @@ async function seed() {
       );
     }
 
-    // Set initial sensor_latest values for dryer 1 sensors
+    // Set initial sensor_latest values for all created sensors
     const sensors = await client.query(
-      `SELECT sensor_id FROM sensor_device WHERE dry_id = $1`,
-      [dryIds[0]]
+      `SELECT sensor_id FROM sensor_device WHERE dry_id = ANY($1::int[])`,
+      [dryIds]
     );
     for (const s of sensors.rows) {
       await client.query(
-        `INSERT INTO sensor_latest (sensor_id, last_value) VALUES ($1, $2)`,
+        `INSERT INTO sensor_latest (sensor_id, last_value) VALUES ($1, $2)
+         ON CONFLICT (sensor_id) DO NOTHING`,
         [s.sensor_id, 25.0 + Math.random() * 30]
       );
     }
@@ -134,6 +143,70 @@ async function seed() {
        VALUES (1, $1, 7200, 70, 50)`,
       [recipeId2]
     );
+
+    // New recipe for scheduled mode without temp/humidity (device actions only)
+    const r3 = await client.query(
+      `INSERT INTO recipe (recipe_name, recipe_type, fruit_id)
+       VALUES ('Say Theo Lich Thu Cong', 'scheduled', $1) RETURNING recipe_id`,
+      [mangoId]
+    );
+    const recipeId3 = r3.rows[0].recipe_id;
+
+    // Phase 1: 1 hour, activate fan
+    const p3_1 = await client.query(
+      `INSERT INTO phase (phase_order, recipe_id, duration_seconds)
+       VALUES (1, $1, 3600) RETURNING phase_id`,
+      [recipeId3]
+    );
+    const phaseId3_1 = p3_1.rows[0].phase_id;
+
+    // Phase 2: 30 minutes, deactivate fan
+    const p3_2 = await client.query(
+      `INSERT INTO phase (phase_order, recipe_id, duration_seconds)
+       VALUES (2, $1, 1800) RETURNING phase_id`,
+      [recipeId3]
+    );
+    const phaseId3_2 = p3_2.rows[0].phase_id;
+
+    // Phase 3: 10 minutes, activate fan again (fan handles both temperature and humidity control)
+    const p3_3 = await client.query(
+      `INSERT INTO phase (phase_order, recipe_id, duration_seconds)
+       VALUES (3, $1, 600) RETURNING phase_id`,
+      [recipeId3]
+    );
+    const phaseId3_3 = p3_3.rows[0].phase_id;
+
+    // Add dehumidifier control for dryer 1 - REMOVED as per user feedback
+    // Fan handles both temperature and humidity
+
+    // Phase actions
+    // Phase 1: activate fan
+    const fanId = (await client.query(
+      `SELECT control_id FROM control_device WHERE dry_id = $1 AND control_type = 'fan' LIMIT 1`,
+      [dryIds[0]]
+    )).rows[0].control_id;
+
+    await client.query(
+      `INSERT INTO phase_actions (phase_id, control_id, action_type)
+       VALUES ($1, $2, 'activate')`,
+      [phaseId3_1, fanId]
+    );
+
+    // Phase 2: deactivate fan
+    await client.query(
+      `INSERT INTO phase_actions (phase_id, control_id, action_type)
+       VALUES ($1, $2, 'deactivate')`,
+      [phaseId3_2, fanId]
+    );
+
+    // Phase 3: activate fan again
+    await client.query(
+      `INSERT INTO phase_actions (phase_id, control_id, action_type)
+       VALUES ($1, $2, 'activate')`,
+      [phaseId3_3, fanId]
+    );
+
+    // Add light sensor for dryer 1 - REMOVED as already added in loop
 
     // Policy on mango recipe phase 1
     const phaseId = p1.rows[0].phase_id;

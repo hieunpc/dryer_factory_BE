@@ -99,7 +99,7 @@
       "name": "02 - Structure",
       "item": [
         {
-          "name": "GET /api/v1/areas",
+          "name": "GET /api/v1/structure/areas",
           "request": {
             "method": "GET",
             "header": [
@@ -113,7 +113,7 @@
           }
         },
         {
-          "name": "GET /api/v1/dryers?area_id=1",
+          "name": "GET /api/v1/structure/dryers?area_id=1",
           "request": {
             "method": "GET",
             "header": [
@@ -128,7 +128,7 @@
           }
         },
         {
-          "name": "GET /api/v1/dryers/{{dryerId}}",
+          "name": "GET /api/v1/structure/dryers/{{dryerId}}",
           "request": {
             "method": "GET",
             "header": [
@@ -147,7 +147,7 @@
       "name": "03 - Device",
       "item": [
         {
-          "name": "PATCH /api/v1/sensors/{{sensorId}} (threshold)",
+          "name": "PATCH /api/v1/device/sensors/{{sensorId}} (threshold)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -166,7 +166,7 @@
           }
         },
         {
-          "name": "GET /api/v1/sensors/{{sensorId}}/latest",
+          "name": "GET /api/v1/device/sensors/{{sensorId}}/latest",
           "request": {
             "method": "GET",
             "header": [
@@ -180,7 +180,7 @@
           }
         },
         {
-          "name": "PATCH /api/v1/controls/{{controlId}}",
+          "name": "PATCH /api/v1/device/controls/{{controlId}}",
           "request": {
             "method": "PATCH",
             "header": [
@@ -204,7 +204,7 @@
       "name": "04 - Catalog",
       "item": [
         {
-          "name": "GET /api/v1/fruits",
+          "name": "GET /api/v1/catalog/fruits",
           "request": {
             "method": "GET",
             "header": [
@@ -218,7 +218,7 @@
           }
         },
         {
-          "name": "GET /api/v1/recipes?fruit_id={{fruitId}}",
+          "name": "GET /api/v1/catalog/recipes?fruit_id={{fruitId}}",
           "request": {
             "method": "GET",
             "header": [
@@ -233,7 +233,7 @@
           }
         },
         {
-          "name": "GET /api/v1/recipes/{{recipeId}}",
+          "name": "GET /api/v1/catalog/recipes/{{recipeId}}",
           "request": {
             "method": "GET",
             "header": [

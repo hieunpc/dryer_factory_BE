@@ -3,6 +3,9 @@ const env = require("./config/env");
 const { getPool } = require("./config/db");
 const { startMqtt } = require("./config/mqtt");
 const { ingestSensorValue } = require("./services/sensorService");
+const { processScheduledBatches } = require("./services/batchService");
+
+const SCHEDULED_BATCH_POLL_SECONDS = 10;
 
 async function bootstrap() {
   await getPool();
@@ -12,6 +15,13 @@ async function bootstrap() {
   startMqtt(async (sensorId, value, source) => {
     await ingestSensorValue(sensorId, value, source);
   });
+
+  setInterval(() => {
+    processScheduledBatches().catch((error) => {
+      // eslint-disable-next-line no-console
+      console.error("Scheduled batch processor error", error);
+    });
+  }, SCHEDULED_BATCH_POLL_SECONDS * 1000);
 
   app.listen(env.port, () => {
     // eslint-disable-next-line no-console

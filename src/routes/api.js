@@ -21,14 +21,17 @@ router.use("/users", userRoutes);
 
 // Structure (areas, dryers, sensors, controls)
 router.use("/", structureRoutes);
+router.use("/structure", structureRoutes);
 
 // Catalog (fruits, recipes, phases, policies)
 router.use("/", catalogRoutes);
+router.use("/catalog", catalogRoutes);
 
 // Batch operations + sensor data
 router.use("/", batchRoutes);
 
 // Monitoring (logs, dashboard, reports)
 router.use("/", monitoringRoutes);
+router.use("/monitoring", monitoringRoutes);
 
 module.exports = router;

@@ -45,3 +45,28 @@ npm start
 - Adafruit MQTT temp/hum ingestion can be mapped to DB sensor ids via:
     - `AIO_SENSOR_ID_TEMP`
     - `AIO_SENSOR_ID_HUM`
+
+## Project Code Structure
+
+Tổng cộng có 20 file code chính trong dự án (không tính tài liệu và các file cấu hình không phải mã nguồn):
+
+- `src/app.js` – cấu hình Express, middleware và đường dẫn API chung.
+- `src/server.js` – khởi động server, kết nối DB và MQTT.
+
+Thư mục `src`:
+- `src/config/` (3 file): cấu hình database, môi trường và MQTT.
+- `src/middleware/` (2 file): xử lý xác thực JWT và bắt lỗi chung.
+- `src/routes/` (6 file): định nghĩa các endpoint API chính.
+- `src/services/` (3 file): logic nghiệp vụ cho log, scope và sensor.
+- `src/utils/` (3 file): helper dùng lại trong toàn bộ app.
+
+Ngoài ra:
+- `scripts/seed.js` – chạy seed dữ liệu mẫu vào database.
+
+### Mục đích chính của từng phần
+
+- `src/config/` – chứa cấu hình môi trường và kết nối.
+- `src/middleware/` – chứa middleware bảo mật và xử lý lỗi.
+- `src/routes/` – chứa các route API cho máy sấy, người dùng, cấu trúc, catalog, batch và monitoring.
+- `src/services/` – tách logic xử lý dữ liệu ra khỏi route.
+- `src/utils/` – hỗ trợ xử lý bất đồng bộ, lỗi HTTP và helper đường dẫn route.

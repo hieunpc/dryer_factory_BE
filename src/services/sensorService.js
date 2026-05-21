@@ -50,11 +50,11 @@ async function ingestSensorValue(sensorId, value, source = "api") {
 
   const hasLatest = latestResult.rows.length > 0;
   const lastValue = hasLatest ? Number(latestResult.rows[0].last_value) : null;
-  const threshold = sensor.threshold == null ? 0 : Number(sensor.threshold);
-  const changed = !hasLatest || Math.abs(Number(value) - lastValue) >= threshold;
+  const sensorThreshold = sensor.threshold == null ? 0 : Number(sensor.threshold);
+  const changed = !hasLatest || Math.abs(Number(value) - lastValue) >= sensorThreshold;
 
   if (!changed) {
-    return { updated: false, reason: "below_threshold" };
+    return { updated: false, reason: "below_sensor_threshold" };
   }
 
   if (hasLatest) {
@@ -88,7 +88,7 @@ async function ingestSensorValue(sensorId, value, source = "api") {
   );
 
   const batch = runningBatchResult.rows[0];
-  if (!batch || !batch.threshold_enabled || !batch.start_time) {
+  if (!batch || !batch.start_time) {
     return { updated: true, batchEvaluated: false };
   }
 
@@ -116,21 +116,32 @@ async function ingestSensorValue(sensorId, value, source = "api") {
   }
 
   const policiesResult = await query(
-    `SELECT policy_id, policy_name
+    `SELECT policy_id, policy_name, policy_type
      FROM policy
      WHERE phase_id = $1 AND is_active = TRUE`,
     [currentPhase.phase_id]
   );
 
   for (const policy of policiesResult.rows) {
+    if (policy.policy_type === "threshold" && !batch.threshold_enabled) {
+      continue;
+    }
+
     const condResult = await query(
-      `SELECT condition_id, sensor_id, value, cp_operator
-       FROM policy_condition
-       WHERE policy_id = $1`,
-      [policy.policy_id]
+      `SELECT pc.condition_id, pc.sensor_id, pc.value, pc.cp_operator
+       FROM policy_condition pc
+       JOIN sensor_device sd ON sd.sensor_id = pc.sensor_id
+       WHERE pc.policy_id = $1 AND sd.dry_id = $2`,
+      [policy.policy_id, sensor.dry_id]
     );
 
     if (!condResult.rows.length) {
+      await writeLog({
+        logStyle: "sensor_trigger",
+        message: `Policy ${policy.policy_name} skipped: no conditions defined`,
+        batchId: batch.batch_id,
+        sensorId: Number(sensorId),
+      });
       continue;
     }
 
@@ -162,7 +173,7 @@ async function ingestSensorValue(sensorId, value, source = "api") {
 
     await writeLog({
       logStyle: "sensor_trigger",
-      message: `Policy ${policy.policy_name} triggered by sensor conditions`,
+      message: `Policy ${policy.policy_name} triggered (${policy.policy_type}) on phase ${currentPhase.phase_order}`,
       batchId: batch.batch_id,
       sensorId: Number(sensorId),
       value: Number(value),
@@ -172,8 +183,8 @@ async function ingestSensorValue(sensorId, value, source = "api") {
       `SELECT pa.action_id, pa.action_type, cd.control_id, cd.control_type
        FROM policy_action pa
        JOIN control_device cd ON cd.control_id = pa.control_id
-       WHERE pa.policy_id = $1`,
-      [policy.policy_id]
+       WHERE pa.policy_id = $1 AND cd.dry_id = $2`,
+      [policy.policy_id, sensor.dry_id]
     );
 
     for (const action of actionsResult.rows) {
@@ -182,8 +193,8 @@ async function ingestSensorValue(sensorId, value, source = "api") {
       await query(
         `UPDATE control_device
          SET status = $1
-         WHERE control_id = $2`,
-        [nextStatus, action.control_id]
+         WHERE control_id = $2 AND dry_id = $3`,
+        [nextStatus, action.control_id, sensor.dry_id]
       );
 
       await writeLog({
@@ -193,11 +204,7 @@ async function ingestSensorValue(sensorId, value, source = "api") {
         controlId: action.control_id,
       });
 
-      publishControlState(action.control_type, {
-        control_id: action.control_id,
-        status: nextStatus,
-        source: "policy",
-      });
+      publishControlState(sensor.dry_id, action.control_id, nextStatus);
     }
   }
 

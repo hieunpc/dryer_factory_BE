@@ -12,13 +12,14 @@
 
 Mỗi **máy sấy** gồm các nhóm thiết bị chính:
 
-- **Thiết bị cảm biến (input):** nhiệt độ, độ ẩm, trạng thái cửa, ...
-- **Thiết bị chấp hành (output):** quạt, đèn.
+- **Thiết bị cảm biến (input):** nhiệt độ, độ ẩm, trạng thái cửa, ánh sáng
+- **Thiết bị chấp hành (output):** quạt (điều chỉnh nhiệt độ và độ ẩm), đèn
 
 Lưu ý:
 
 - Một máy sấy có thể có **nhiều thiết bị output cùng loại**.
 - Ví dụ: có thể cấu hình **2 quạt + 2 đèn** hoặc nhiều hơn, không giới hạn ở 1 thiết bị mỗi loại.
+- **Quạt** là thiết bị chính để điều chỉnh cả nhiệt độ và độ ẩm trong quá trình sấy.
 
 ---
 
@@ -27,26 +28,66 @@ Lưu ý:
 - Mỗi **loại trái cây** được gắn với một **công thức sấy (Drying Recipe)** riêng.
 - Một công thức sấy bao gồm nhiều **giai đoạn (Phase)**:
   Phase 1 -> Phase 2 -> ... -> Phase N
-- Mỗi **phase** định nghĩa các thông số:
-- 🌡️ Nhiệt độ
-- 💧 Độ ẩm
-- ⏱️ Thời gian
+- Mỗi **phase** định nghĩa:
+  - 🌡️ Nhiệt độ (tùy chọn, cho mode tự động có điều khiển nhiệt/ẩm)
+  - 💧 Độ ẩm (tùy chọn, cho mode tự động có điều khiển nhiệt/ẩm)
+  - ⏱️ Thời gian
+  - 🔧 Hành động thiết bị (cho mode theo lịch: bật/tắt quạt, đèn theo thời gian)
 
 ---
 
-## 4. Loại lịch trình vận hành
+## 4. Batch & Workflow sấy
+
+### 4.1. Khởi tạo Batch
+
+- Trước khi bắt đầu, mỗi **batch** sẽ chọn một **recipe** phù hợp với loại trái cây.
+- Batch sẽ chạy theo thứ tự các **phase** trong recipe đã chọn.
+
+### 4.1. Khởi tạo Batch
+
+- Trước khi bắt đầu, mỗi **batch** sẽ chọn một **recipe** phù hợp với loại trái cây.
+- Batch sẽ chạy theo thứ tự các **phase** trong recipe đã chọn.
+
+### 4.2. Chuyển tiếp Phase
+
+- **Scheduled Mode**: Hệ thống tự động chuyển tiếp qua các phase theo thời gian đã cấu hình.
+  - Chạy hết thời gian của phase hiện tại → tự động chuyển sang phase tiếp theo.
+  - Trong mỗi phase, thực hiện các hành động thiết bị đã định nghĩa (bật/tắt quạt, đèn).
+  - Tiếp tục cho đến khi hoàn thành tất cả phase trong recipe.
+
+### 4.3. Điều chỉnh tự động trong Phase
+
+- Trong mỗi phase, nếu recipe có định nghĩa nhiệt độ/độ ẩm:
+  - Hệ thống liên tục giám sát các **condition** (điều kiện):
+    - Nhiệt độ thực tế vs nhiệt độ yêu cầu của phase
+    - Độ ẩm thực tế vs độ ẩm yêu cầu của phase
+  - Nếu phát hiện **vi phạm condition** (không đạt yêu cầu):
+    - Kích hoạt **policy** để điều chỉnh các **control_device** (thiết bị chấp hành).
+    - Ví dụ: bật/tắt quạt, điều chỉnh đèn để đưa thông số về mức phù hợp với phase.
+
+### 4.4. Chế độ Manual với hỗ trợ tự động
+
+- **Manual Mode**: Người dùng có thể tự bật/tắt và điều chỉnh thông số thủ công.
+- Tuy nhiên, hệ thống vẫn có thể **tự động kích hoạt** các policy để hỗ trợ điều chỉnh thông số trong quá trình sấy, đảm bảo an toàn và hiệu quả.
+
+---
+
+## 5. Loại lịch trình vận hành
 
 Hệ thống chỉ có **2 loại lịch trình chính**:
 
-### 4.1. Thủ công (Manual)
+### 5.1. Thủ công (Manual)
 
 - Người dùng tự bật/tắt và điều chỉnh thông số trong quá trình sấy.
+- Hỗ trợ tự động kích hoạt policy để điều chỉnh khi cần thiết.
 
-### 4.2. Tự động theo lịch (Scheduled / Automatic)
+### 5.2. Tự động theo lịch (Scheduled / Automatic)
 
 - Hệ thống chạy theo lịch trình thời gian được cấu hình sẵn (theo phase hoặc mốc thời gian).
+- Bao gồm chuyển tiếp phase tự động và thực hiện hành động thiết bị (bật/tắt quạt, đèn) theo định nghĩa trong recipe.
+- Có thể kết hợp với điều khiển nhiệt/ẩm nếu recipe định nghĩa.
 
-### 4.3. Threshold là tùy chọn bổ sung (không phải loại lịch trình)
+### 5.3. Threshold là tùy chọn bổ sung (không phải loại lịch trình)
 
 - **Threshold-based** là một **option điều kiện** có thể gắn vào:
 - Lịch trình **thủ công**
@@ -197,6 +238,10 @@ flowchart TD
   System --> Area
   Area --> Dryer
   Dryer --> Sensor
+  Sensor --> Temperature
+  Sensor --> Humidity
+  Sensor --> DoorState
+  Sensor --> Light
   Dryer --> OutputDevice
   OutputDevice --> Fan
   OutputDevice --> Lamp
@@ -205,6 +250,10 @@ flowchart TD
   Batch --> Fruit
   Batch --> Recipe
   Recipe --> Phase
+  Phase --> Temperature
+  Phase --> Humidity
+  Phase --> Duration
+  Phase --> DeviceAction
 
   Batch --> ScheduleMode
   ScheduleMode --> Manual
@@ -212,6 +261,7 @@ flowchart TD
 
   Batch --> ThresholdOption
   ThresholdOption --> Policy
+  Policy --> SensorCondition
   Policy --> DeviceAction
 
   Dashboard --> KPI

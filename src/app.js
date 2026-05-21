@@ -7,6 +7,18 @@ const env = require("./config/env");
 const apiRoutes = require("./routes/api");
 const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
 
+const { processScheduledBatches } = require("./services/batchService");
+
+// Chạy mỗi 10 giây
+setInterval(async () => {
+  try {
+    await processScheduledBatches();
+  } catch (error) {
+    console.error("Error in scheduled batch processor:", error);
+  }
+}, 10 * 1000);
+
+
 const app = express();
 
 app.use(helmet());

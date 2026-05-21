@@ -7,16 +7,25 @@ const { ok, parseBool, ensureEnum } = require("../utils/routeHelpers");
 const { requireAdmin } = require("../middleware/auth");
 const { writeLog } = require("../services/logService");
 const { ingestSensorValue } = require("../services/sensorService");
+const { getBatchPhaseInfo, executePhaseActions } = require("../services/batchService");
 const { getAccessibleDryerIds, ensureDryerAccess, inClauseFromIds } = require("../services/scopeService");
 
 const router = express.Router();
 
 router.post("/batches", asyncHandler(async (req, res) => {
-  const { dry_id, fruit_id, recipe_id, operation_mode, threshold_enabled = false, is_customize = false } = req.body;
+  const { dry_id, fruit_id, recipe_id, operation_mode, threshold_enabled = false, is_customize = false, scheduled_delay_seconds = null } = req.body;
   if (!dry_id || !fruit_id || !recipe_id || !operation_mode) {
     throw new HttpError(400, "VALIDATION_ERROR", "dry_id, fruit_id, recipe_id, operation_mode are required");
   }
   ensureEnum(operation_mode, ["manual", "scheduled"], "operation_mode");
+  
+  // Validate scheduled_delay_seconds if provided
+  if (scheduled_delay_seconds !== null && scheduled_delay_seconds !== undefined) {
+    if (typeof scheduled_delay_seconds !== 'number' || scheduled_delay_seconds < 0) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds must be a non-negative number");
+    }
+  }
+
   const allowed = await ensureDryerAccess(req.user, Number(dry_id));
   if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to dryer");
 
@@ -31,11 +40,37 @@ router.post("/batches", asyncHandler(async (req, res) => {
   );
   if (running.rows[0].total > 0) throw new HttpError(409, "CONFLICT", "Dryer already has a running batch");
 
+  const recipeCheck = await query(
+    `SELECT recipe_id FROM recipe WHERE recipe_id = $1`,
+    [Number(recipe_id)]
+  );
+  if (!recipeCheck.rows.length) throw new HttpError(404, "NOT_FOUND", "Recipe not found");
+
+  const fruitCheck = await query(
+    `SELECT fruit_id FROM fruit WHERE fruit_id = $1`,
+    [Number(fruit_id)]
+  );
+  if (!fruitCheck.rows.length) throw new HttpError(404, "NOT_FOUND", "Fruit type not found");
+
+  const raceCheckResult = await query(
+    `SELECT COUNT(*)::int AS total FROM batch WHERE dry_id = $1 AND status = 'running'`,
+    [Number(dry_id)]
+  );
+  if (raceCheckResult.rows[0].total > 0) throw new HttpError(409, "CONFLICT", "Dryer now has a running batch (concurrent request)");
+
+  // Calculate scheduled_start_time if scheduled_delay_seconds is provided and > 0
+  let scheduledStartTime = null;
+  let finalDelaySeconds = scheduled_delay_seconds;
+  if (operation_mode === 'scheduled' && scheduled_delay_seconds && scheduled_delay_seconds > 0) {
+    // scheduled_start_time = NOW() + scheduled_delay_seconds
+    scheduledStartTime = new Date(Date.now() + scheduled_delay_seconds * 1000);
+  }
+
   const result = await query(
-    `INSERT INTO batch (status, operation_mode, threshold_enabled, is_customize, dry_id, fruit_id, recipe_id, app_user_id)
-     VALUES ('pending', $1, $2, $3, $4, $5, $6, $7)
-     RETURNING batch_id, status, operation_mode, threshold_enabled, is_customize, dry_id, fruit_id, recipe_id, app_user_id, created_at`,
-    [operation_mode, Boolean(threshold_enabled), Boolean(is_customize), Number(dry_id), Number(fruit_id), Number(recipe_id), req.user.id]
+    `INSERT INTO batch (status, operation_mode, threshold_enabled, is_customize, scheduled_delay_seconds, scheduled_start_time, dry_id, fruit_id, recipe_id, app_user_id)
+     VALUES ('pending', $1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING batch_id, status, operation_mode, threshold_enabled, is_customize, scheduled_delay_seconds, scheduled_start_time, dry_id, fruit_id, recipe_id, app_user_id, created_at`,
+    [operation_mode, Boolean(threshold_enabled), Boolean(is_customize), finalDelaySeconds, scheduledStartTime, Number(dry_id), Number(fruit_id), Number(recipe_id), req.user.id]
   );
   return res.status(201).json({ status: "success", data: result.rows[0] });
 }));
@@ -46,7 +81,7 @@ router.get("/batches", asyncHandler(async (req, res) => {
   const scopeClause = req.user.isAdmin ? "1=1" : `b.dry_id IN ${inClauseFromIds(dryerIds)}`;
   const result = await query(
     `SELECT b.batch_id, b.start_time, b.end_time, b.status, b.operation_mode, b.threshold_enabled,
-            b.is_customize, b.dry_id, b.fruit_id, b.recipe_id, b.app_user_id, b.created_at
+            b.is_customize,b.scheduled_delay_seconds, b.scheduled_start_time, b.dry_id, b.fruit_id, b.recipe_id, b.app_user_id, b.created_at
      FROM batch b
      WHERE ${scopeClause}
        AND ($1::text IS NULL OR b.status = $1)
@@ -67,7 +102,7 @@ router.get("/batches/:id", asyncHandler(async (req, res) => {
   const batchId = Number(req.params.id);
   const batchResult = await query(
     `SELECT batch_id, start_time, end_time, status, operation_mode, threshold_enabled,
-            is_customize, dry_id, fruit_id, recipe_id, app_user_id, created_at
+            is_customize, scheduled_delay_seconds, scheduled_start_time, dry_id, fruit_id, recipe_id, app_user_id, created_at
      FROM batch WHERE batch_id = $1`,
     [batchId]
   );
@@ -76,7 +111,7 @@ router.get("/batches/:id", asyncHandler(async (req, res) => {
   const allowed = await ensureDryerAccess(req.user, batch.dry_id);
   if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
   const phases = await query(
-    `SELECT phase_id, phase_order, duration_seconds, humidity, temperature
+    `SELECT phase_id, phase_order, duration_seconds, humidity, temperature, light
      FROM phase WHERE recipe_id = $1 ORDER BY phase_order`,
     [batch.recipe_id]
   );
@@ -85,22 +120,159 @@ router.get("/batches/:id", asyncHandler(async (req, res) => {
      WHERE dry_id = $1 ORDER BY control_id`,
     [batch.dry_id]
   );
-  return ok(res, { ...batch, phases: phases.rows, controls: controls.rows });
+  const phaseInfo = await getBatchPhaseInfo(batchId);
+  // Sensor data is ALWAYS returned, regardless of threshold_enabled flag
+  // threshold_enabled only controls whether threshold conditions trigger auto-actions
+  const sensorData = (await query(
+    `SELECT sd.sensor_id, sd.sensor_type, sd.threshold, sl.last_value, sl.updated_at
+     FROM sensor_device sd
+     LEFT JOIN sensor_latest sl ON sl.sensor_id = sd.sensor_id
+     WHERE sd.dry_id = $1
+     ORDER BY sd.sensor_id`,
+    [batch.dry_id]
+  )).rows;
+  const response = {
+    ...batch,
+    phases: phases.rows,
+    controls: controls.rows,
+    scheduled_phase_info: phaseInfo,
+    sensor_data: sensorData,
+  };
+  return ok(res, response);
 }));
 
 router.post("/batches/:id/start", asyncHandler(async (req, res) => {
   const batchId = Number(req.params.id);
-  const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batchResult = await query(
+    `SELECT batch_id, status, dry_id, recipe_id FROM batch WHERE batch_id = $1`,
+    [batchId]
+  );
   const batch = batchResult.rows[0];
   if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
   const allowed = await ensureDryerAccess(req.user, batch.dry_id);
   if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
   if (batch.status !== "pending") throw new HttpError(409, "CONFLICT", "Only pending batch can be started");
 
-  await query(`UPDATE batch SET status = 'running', start_time = NOW() WHERE batch_id = $1`, [batchId]);
+  const phasesResult = await query(
+    `SELECT phase_id FROM phase WHERE recipe_id = $1 LIMIT 1`,
+    [batch.recipe_id]
+  );
+  if (!phasesResult.rows.length) {
+    throw new HttpError(409, "CONFLICT", "Batch recipe has no phases configured");
+  }
+
+  const runningBatchResult = await query(
+    `SELECT COUNT(*)::int AS total FROM batch WHERE dry_id = $1 AND status = 'running' AND batch_id != $2`,
+    [batch.dry_id, batchId]
+  );
+  if (runningBatchResult.rows[0].total > 0) {
+    throw new HttpError(409, "CONFLICT", "Dryer already has another running batch");
+  }
+
+  const dryerStatusResult = await query(`SELECT status FROM Dryer WHERE dry_id = $1`, [batch.dry_id]);
+  const dryerStatus = dryerStatusResult.rows[0];
+  if (!dryerStatus || dryerStatus.status !== "Idle") {
+    throw new HttpError(409, "CONFLICT", "Dryer must be Idle before starting batch");
+  }
+
+  await query(`UPDATE batch SET status = 'running', start_time = NOW(), elapsed_seconds = 0 WHERE batch_id = $1`, [batchId]);
   await query(`UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`, [batch.dry_id]);
   await writeLog({ logStyle: "batch_start", message: `Batch ${batchId} started`, batchId, appUserId: req.user.id });
+
+  if (batch.operation_mode === "scheduled") {
+    const firstPhaseResult = await query(
+      `SELECT phase_id FROM phase WHERE recipe_id = $1 ORDER BY phase_order LIMIT 1`,
+      [batch.recipe_id]
+    );
+    if (firstPhaseResult.rows.length) {
+      await executePhaseActions(batchId, firstPhaseResult.rows[0].phase_id, batch.dry_id);
+    }
+  }
+
   return ok(res, { message: "Batch started" });
+}));
+
+router.post("/batches/:id/pause", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+  if (batch.status !== "running") {
+    throw new HttpError(409, "CONFLICT", "Only running batch can be paused");
+  }
+
+  await query(`UPDATE batch SET status = 'paused', elapsed_seconds = COALESCE(elapsed_seconds, 0) + FLOOR(EXTRACT(EPOCH FROM NOW() - start_time))::int, start_time = NULL WHERE batch_id = $1`, [batchId]);
+  await query(`UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`, [batch.dry_id]);
+  await writeLog({ logStyle: "batch_pause", message: `Batch ${batchId} paused`, batchId, appUserId: req.user.id });
+  return ok(res, { message: "Batch paused" });
+}));
+
+router.post("/batches/:id/resume", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const batchResult = await query(`SELECT batch_id, status, dry_id, recipe_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+  if (batch.status !== "paused") {
+    throw new HttpError(409, "CONFLICT", "Only paused batch can be resumed");
+  }
+
+  const runningBatchResult = await query(
+    `SELECT COUNT(*)::int AS total FROM batch WHERE dry_id = $1 AND status = 'running' AND batch_id != $2`,
+    [batch.dry_id, batchId]
+  );
+  if (runningBatchResult.rows[0].total > 0) {
+    throw new HttpError(409, "CONFLICT", "Dryer already has another running batch");
+  }
+
+  const dryerStatusResult = await query(`SELECT status FROM Dryer WHERE dry_id = $1`, [batch.dry_id]);
+  const dryerStatus = dryerStatusResult.rows[0];
+  if (!dryerStatus || (dryerStatus.status !== "Idle" && dryerStatus.status !== "Stopped" && dryerStatus.status !== "Running")) {
+    throw new HttpError(409, "CONFLICT", "Dryer must be Idle, Stopped, or Running before resuming batch");
+  }
+
+  await query(`UPDATE batch SET status = 'running', start_time = NOW() WHERE batch_id = $1`, [batchId]);
+  await query(`UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`, [batch.dry_id]);
+  await writeLog({ logStyle: "batch_resume", message: `Batch ${batchId} resumed`, batchId, appUserId: req.user.id });
+
+  return ok(res, { message: "Batch resumed" });
+}));
+
+router.post("/batches/:id/abort", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+  if (["completed", "cancelled", "aborted"].includes(batch.status)) {
+    throw new HttpError(409, "CONFLICT", "Cannot abort a batch that is already finished");
+  }
+
+  await query(`UPDATE batch SET status = 'cancelled', end_time = NOW() WHERE batch_id = $1`, [batchId]);
+  await query(`UPDATE Dryer SET status = 'Idle' WHERE dry_id = $1`, [batch.dry_id]);
+  await writeLog({ logStyle: "batch_abort", message: `Batch ${batchId} aborted`, batchId, appUserId: req.user.id });
+  return ok(res, { message: "Batch aborted" });
+}));
+
+router.post("/batches/:id/cancel", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+  if (["completed", "cancelled", "aborted"].includes(batch.status)) {
+    throw new HttpError(409, "CONFLICT", "Cannot cancel a batch that is already finished");
+  }
+
+  await query(`UPDATE batch SET status = 'cancelled', end_time = NOW() WHERE batch_id = $1`, [batchId]);
+  await query(`UPDATE Dryer SET status = 'Idle' WHERE dry_id = $1`, [batch.dry_id]);
+  await writeLog({ logStyle: "batch_abort", message: `Batch ${batchId} cancelled`, batchId, appUserId: req.user.id });
+  return ok(res, { message: "Batch cancelled" });
 }));
 
 router.post("/batches/:id/stop", asyncHandler(async (req, res) => {
@@ -112,6 +284,10 @@ router.post("/batches/:id/stop", asyncHandler(async (req, res) => {
   if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
   const allowed = await ensureDryerAccess(req.user, batch.dry_id);
   if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+  if (batch.status !== "running") {
+    throw new HttpError(409, "CONFLICT", "Only running batch can be stopped");
+  }
+
   await query(`UPDATE batch SET status = $1, end_time = NOW() WHERE batch_id = $2`, [finalStatus, batchId]);
   await query(`UPDATE Dryer SET status = 'Idle' WHERE dry_id = $1`, [batch.dry_id]);
   await writeLog({ logStyle: "batch_end", message: `Batch ${batchId} stopped with status ${finalStatus}`, batchId, appUserId: req.user.id });
@@ -157,7 +333,7 @@ router.post("/batches/:id/controls/:controlId/commands", asyncHandler(async (req
   const status = action_type === "activate" ? "active" : "inactive";
   await query(`UPDATE control_device SET status = $1 WHERE control_id = $2`, [status, controlId]);
   await writeLog({ logStyle: "device_action", message: `Manual action ${action_type} on control ${controlId}`, batchId, controlId, appUserId: req.user.id });
-  publishControlState(control.control_type, { control_id: controlId, status, source: "manual", batch_id: batchId });
+  publishControlState(batch.dry_id, controlId, status);
   return ok(res, { message: "Command executed", control_id: controlId, status });
 }));
 
