@@ -366,6 +366,19 @@ Request:
 "cp_operator": ">="
 }
 
+### PATCH /policies/{id}/conditions/{condition_id}
+
+Role: [ADMIN]  
+Mô tả: Cập nhật trực tiếp giá trị điều kiện ngưỡng cho policy.
+
+Request:
+
+{
+"sensor_id": 2,
+"value": 90,
+"cp_operator": ">="
+}
+
 ### POST /policies/{id}/actions
 
 Role: [ADMIN]  
@@ -436,7 +449,7 @@ Mô tả: Chuyển status sang running và set start_time.
 ### POST /batches/{id}/stop
 
 Role: [USER]  
-Mô tả: Dừng batch, cập nhật status = cancelled hoặc completed theo lựa chọn.
+Mô tả: Dừng batch, cập nhật status = completed hoặc aborted theo lựa chọn.
 
 Request:
 
@@ -444,7 +457,7 @@ Request:
 "final_status": "completed"
 }
 
-final_status chỉ nhận completed hoặc cancelled.
+final_status chỉ nhận completed hoặc aborted.
 
 ### POST /batches/{id}/toggle-threshold
 
@@ -629,7 +642,7 @@ Mô tả: Tải file export nếu thuộc quyền truy cập của người gọ
 - cp_operator chỉ nhận: >, <, >=, <=, =
 - action_type chỉ nhận: activate, deactivate
 - operation_mode chỉ nhận: manual, scheduled
-- batch status chỉ nhận: pending, running, completed, failed, cancelled
+- batch status chỉ nhận: pending, running, completed, failed, aborted
 - dryer status chỉ nhận: Running, Idle, Maintenance
 
 ---

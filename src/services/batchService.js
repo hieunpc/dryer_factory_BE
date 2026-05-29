@@ -141,11 +141,10 @@ async function getBatchPhaseInfo(batchId) {
 }
 
 async function processScheduledBatches() {
-  
   const pendingBatches = await query(
     `SELECT batch_id, dry_id, recipe_id, scheduled_start_time
      FROM batch
-     WHERE status = 'pending' 
+     WHERE status = 'pending'
        AND operation_mode = 'scheduled'
        AND scheduled_start_time IS NOT NULL
        AND scheduled_start_time <= NOW()`
@@ -157,78 +156,38 @@ async function processScheduledBatches() {
         `SELECT status FROM Dryer WHERE dry_id = $1`,
         [batch.dry_id]
       );
-      
+
       if (!dryerCheck.rows[0] || dryerCheck.rows[0].status !== "Idle") {
+        await writeLog({
+          logStyle: "batch_running",
+          message: `Scheduled batch ${batch.batch_id} skipped because dryer ${batch.dry_id} is not Idle`,
+          batchId: Number(batch.batch_id),
+        });
         continue;
       }
 
       await query(
-        `UPDATE batch SET status = 'running', start_time = NOW(), 
-         elapsed_seconds = 0 WHERE batch_id = $1`,
+        `UPDATE batch SET status = 'running', start_time = NOW(), elapsed_seconds = 0 WHERE batch_id = $1`,
         [batch.batch_id]
       );
-      
+
       await query(
         `UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`,
         [batch.dry_id]
       );
 
       const firstPhaseResult = await query(
-        `SELECT phase_id FROM phase WHERE recipe_id = $1 
-         ORDER BY phase_order LIMIT 1`,
+        `SELECT phase_id FROM phase WHERE recipe_id = $1 ORDER BY phase_order LIMIT 1`,
         [batch.recipe_id]
       );
-          // Auto-start scheduled batches that have a scheduled_start_time reached
-          const pendingToStart = await query(
-            `SELECT batch_id, dry_id, recipe_id, scheduled_start_time
-             FROM batch
-             WHERE status = 'pending' AND operation_mode = 'scheduled' AND scheduled_start_time IS NOT NULL AND scheduled_start_time <= NOW()`
-          );
-
-          for (const pb of pendingToStart.rows) {
-            // skip if dryer already has a running batch
-            const runningCount = await query(
-              `SELECT COUNT(*)::int AS total FROM batch WHERE dry_id = $1 AND status = 'running'`,
-              [Number(pb.dry_id)]
-            );
-            if (runningCount.rows[0].total > 0) {
-              await writeLog({ logStyle: "batch_running", message: `Scheduled batch ${pb.batch_id} skipped (dryer busy)`, batchId: Number(pb.batch_id) });
-              continue;
-            }
-
-            const dryerStatusResult = await query(`SELECT status FROM Dryer WHERE dry_id = $1`, [Number(pb.dry_id)]);
-            const dryerStatus = dryerStatusResult.rows[0];
-            if (!dryerStatus || dryerStatus.status !== 'Idle') {
-              await writeLog({ logStyle: "batch_running", message: `Scheduled batch ${pb.batch_id} skipped (dryer not Idle)`, batchId: Number(pb.batch_id) });
-              continue;
-            }
-
-            // start the batch
-            await query(`UPDATE batch SET status = 'running', start_time = NOW(), elapsed_seconds = 0 WHERE batch_id = $1`, [Number(pb.batch_id)]);
-            await query(`UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`, [Number(pb.dry_id)]);
-            await writeLog({ logStyle: "batch_start", message: `Scheduled batch ${pb.batch_id} auto-started`, batchId: Number(pb.batch_id) });
-
-            const firstPhaseResult = await query(
-              `SELECT phase_id FROM phase WHERE recipe_id = $1 ORDER BY phase_order LIMIT 1`,
-              [Number(pb.recipe_id)]
-            );
-            if (firstPhaseResult.rows.length) {
-              await executePhaseActions(pb.batch_id, firstPhaseResult.rows[0].phase_id, pb.dry_id);
-            }
-          }
-      
       if (firstPhaseResult.rows.length) {
-        await executePhaseActions(
-          batch.batch_id,
-          firstPhaseResult.rows[0].phase_id,
-          batch.dry_id
-        );
+        await executePhaseActions(batch.batch_id, firstPhaseResult.rows[0].phase_id, batch.dry_id);
       }
 
       await writeLog({
         logStyle: "batch_start",
         message: `Batch ${batch.batch_id} auto-started (scheduled)`,
-        batchId: batch.batch_id
+        batchId: batch.batch_id,
       });
     } catch (error) {
       console.error(`Error auto-starting batch ${batch.batch_id}:`, error);

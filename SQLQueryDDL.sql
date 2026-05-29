@@ -176,7 +176,7 @@ CREATE TABLE batch (
     elapsed_seconds INT NOT NULL DEFAULT 0,
     status NVARCHAR(50) NOT NULL
         CONSTRAINT CK_batch_status
-        CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled', 'aborted')),
+        CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'aborted')),
     operation_mode NVARCHAR(20) NOT NULL
         CONSTRAINT CK_batch_operation_mode
         CHECK (operation_mode IN ('manual', 'scheduled')),

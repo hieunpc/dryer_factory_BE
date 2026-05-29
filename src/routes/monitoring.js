@@ -136,7 +136,7 @@ router.get("/reports/operations", asyncHandler(async (req, res) => {
     `SELECT created_at::date AS report_date, COUNT(*)::int AS total_batches,
             SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END)::int AS completed_batches,
             SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END)::int AS failed_batches,
-            SUM(CASE WHEN status='cancelled' THEN 1 ELSE 0 END)::int AS cancelled_batches
+            SUM(CASE WHEN status='aborted' THEN 1 ELSE 0 END)::int AS aborted_batches
      FROM batch WHERE ${scopeClause}
      GROUP BY created_at::date ORDER BY report_date DESC`
   );

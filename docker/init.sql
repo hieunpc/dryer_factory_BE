@@ -112,7 +112,7 @@ CREATE TABLE batch (
     start_time TIMESTAMPTZ,
     end_time TIMESTAMPTZ,
     elapsed_seconds INTEGER NOT NULL DEFAULT 0,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled', 'aborted')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'running', 'paused', 'completed', 'failed', 'aborted')),
     operation_mode VARCHAR(20) NOT NULL CHECK (operation_mode IN ('manual', 'scheduled')),
     threshold_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     is_customize BOOLEAN NOT NULL DEFAULT FALSE,
@@ -128,7 +128,7 @@ CREATE TABLE batch (
 CREATE TABLE log (
     log_id SERIAL PRIMARY KEY,
     log_style VARCHAR(60) NOT NULL CHECK (log_style IN (
-        'parameter_change', 'sensor_trigger', 'batch_start', 'batch_running',
+        'parameter_change', 'sensor_trigger', 'batch_start', 'batch_running','batch_pause','batch_resume','batch_abort',
         'batch_end', 'device_action', 'audit_login', 'audit_permission_change', 'audit_config_change'
     )),
     message VARCHAR(1000) NOT NULL,

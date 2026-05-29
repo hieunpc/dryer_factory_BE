@@ -101,11 +101,29 @@ router.post("/recipes", requireAdmin, asyncHandler(async (req, res) => {
       const phaseLight = phase.light == null ? null : Number(phase.light);
       const phaseHumidity = phase.humidity == null ? null : Number(phase.humidity);
       const phaseTemperature = phase.temperature == null ? null : Number(phase.temperature);
-      await client.query(
+      const phaseInsert = await client.query(
         `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature, light)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING phase_id`,
         [Number(phase.phase_order), recipe.recipe_id, Number(phase.duration_seconds), phaseHumidity, phaseTemperature, phaseLight]
       );
+      const phaseId = phaseInsert.rows[0].phase_id;
+      
+      // Create phase actions if provided
+      if (Array.isArray(phase.actions) && phase.actions.length) {
+        for (const action of phase.actions) {
+          if (!action.control_id || !action.action_type) {
+            throw new HttpError(400, "VALIDATION_ERROR", "action.control_id and action.action_type are required");
+          }
+          ensureEnum(action.action_type, ["activate", "deactivate"], "action_type");
+          await client.query(
+            `INSERT INTO phase_actions (phase_id, control_id, action_type, start_offset_seconds, duration_seconds)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [phaseId, Number(action.control_id), action.action_type, 
+             Number(action.start_offset_seconds || 0), 
+             action.duration_seconds == null ? null : Number(action.duration_seconds)]
+          );
+        }
+      }
     }
     await client.query("COMMIT");
     return res.status(201).json({ status: "success", data: recipe });
@@ -137,16 +155,35 @@ router.put("/recipes/:id/phases", requireAdmin, asyncHandler(async (req, res) =>
   const client = await getClient();
   try {
     await client.query("BEGIN");
+    // Delete old phases (phase_actions will cascade delete)
     await client.query(`DELETE FROM phase WHERE recipe_id = $1`, [recipeId]);
     for (const phase of phases) {
       const phaseLight = phase.light == null ? null : Number(phase.light);
       const phaseHumidity = phase.humidity == null ? null : Number(phase.humidity);
       const phaseTemperature = phase.temperature == null ? null : Number(phase.temperature);
-      await client.query(
+      const phaseInsert = await client.query(
         `INSERT INTO phase (phase_order, recipe_id, duration_seconds, humidity, temperature, light)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING phase_id`,
         [Number(phase.phase_order), recipeId, Number(phase.duration_seconds), phaseHumidity, phaseTemperature, phaseLight]
       );
+      const phaseId = phaseInsert.rows[0].phase_id;
+      
+      // Create phase actions if provided
+      if (Array.isArray(phase.actions) && phase.actions.length) {
+        for (const action of phase.actions) {
+          if (!action.control_id || !action.action_type) {
+            throw new HttpError(400, "VALIDATION_ERROR", "action.control_id and action.action_type are required");
+          }
+          ensureEnum(action.action_type, ["activate", "deactivate"], "action_type");
+          await client.query(
+            `INSERT INTO phase_actions (phase_id, control_id, action_type, start_offset_seconds, duration_seconds)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [phaseId, Number(action.control_id), action.action_type, 
+             Number(action.start_offset_seconds || 0), 
+             action.duration_seconds == null ? null : Number(action.duration_seconds)]
+          );
+        }
+      }
     }
     await client.query("COMMIT");
     return ok(res, { message: "Recipe phases replaced" });
@@ -157,6 +194,8 @@ router.put("/recipes/:id/phases", requireAdmin, asyncHandler(async (req, res) =>
     client.release();
   }
 }));
+
+
 
 // --- Policies ---
 router.get("/policies", asyncHandler(async (req, res) => {
@@ -208,6 +247,36 @@ router.post("/policies/:id/conditions", requireAdmin, asyncHandler(async (req, r
   return res.status(201).json({ status: "success", data: result.rows[0] });
 }));
 
+router.patch("/policies/:id/conditions/:conditionId", requireAdmin, asyncHandler(async (req, res) => {
+  const policyId = Number(req.params.id);
+  const conditionId = Number(req.params.conditionId);
+  const { sensor_id, value, cp_operator } = req.body;
+
+  if (cp_operator != null) {
+    ensureEnum(cp_operator, [">", "<", ">=", "<=", "="], "cp_operator");
+  }
+
+  // Ensure the condition exists and belongs to the expected policy
+  const existingCondition = await query(
+    `SELECT condition_id FROM policy_condition WHERE policy_id = $1 AND condition_id = $2`,
+    [policyId, conditionId]
+  );
+  if (!existingCondition.rows.length) {
+    throw new HttpError(404, "NOT_FOUND", "Policy condition not found");
+  }
+
+  await query(
+    `UPDATE policy_condition
+     SET sensor_id = COALESCE($1, sensor_id),
+         value = COALESCE($2, value),
+         cp_operator = COALESCE($3, cp_operator)
+     WHERE policy_id = $4 AND condition_id = $5`,
+    [sensor_id == null ? null : Number(sensor_id), value == null ? null : Number(value), cp_operator || null, policyId, conditionId]
+  );
+
+  return ok(res, { message: "Policy condition updated" });
+}));
+
 router.post("/policies/:id/actions", requireAdmin, asyncHandler(async (req, res) => {
   const policyId = Number(req.params.id);
   const { control_id, action_type } = req.body;
@@ -246,6 +315,7 @@ router.get("/phases/:id/actions", asyncHandler(async (req, res) => {
     [phaseId]
   );
   return ok(res, result.rows);
+
 }));
 
 router.post("/phases/:id/actions", requireAdmin, asyncHandler(async (req, res) => {

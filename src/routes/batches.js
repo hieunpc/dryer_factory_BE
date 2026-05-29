@@ -13,16 +13,47 @@ const { getAccessibleDryerIds, ensureDryerAccess, inClauseFromIds } = require(".
 const router = express.Router();
 
 router.post("/batches", asyncHandler(async (req, res) => {
-  const { dry_id, fruit_id, recipe_id, operation_mode, threshold_enabled = false, is_customize = false, scheduled_delay_seconds = null } = req.body;
+  const { dry_id, fruit_id, recipe_id, operation_mode, threshold_enabled = false, is_customize = false, scheduled_delay_seconds = null, scheduled_start_time = null } = req.body;
   if (!dry_id || !fruit_id || !recipe_id || !operation_mode) {
     throw new HttpError(400, "VALIDATION_ERROR", "dry_id, fruit_id, recipe_id, operation_mode are required");
   }
   ensureEnum(operation_mode, ["manual", "scheduled"], "operation_mode");
-  
-  // Validate scheduled_delay_seconds if provided
-  if (scheduled_delay_seconds !== null && scheduled_delay_seconds !== undefined) {
-    if (typeof scheduled_delay_seconds !== 'number' || scheduled_delay_seconds < 0) {
-      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds must be a non-negative number");
+
+  let finalDelaySeconds = null;
+  let scheduledStartTime = null;
+
+  if (operation_mode === 'scheduled') {
+    const hasDelay = scheduled_delay_seconds !== null && scheduled_delay_seconds !== undefined;
+    const hasTime = scheduled_start_time !== null && scheduled_start_time !== undefined;
+
+    if (!hasDelay && !hasTime) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds or scheduled_start_time is required for scheduled mode");
+    }
+    if (hasDelay && hasTime) {
+      throw new HttpError(400, "VALIDATION_ERROR", "Cannot specify both scheduled_delay_seconds and scheduled_start_time");
+    }
+
+    if (hasDelay) {
+      if (typeof scheduled_delay_seconds !== 'number' || scheduled_delay_seconds <= 0) {
+        throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds must be a positive number");
+      }
+      finalDelaySeconds = scheduled_delay_seconds;
+      scheduledStartTime = new Date(Date.now() + scheduled_delay_seconds * 1000);
+    }
+
+    if (hasTime) {
+      scheduledStartTime = new Date(scheduled_start_time);
+      if (Number.isNaN(scheduledStartTime.getTime())) {
+        throw new HttpError(400, "VALIDATION_ERROR", "scheduled_start_time must be a valid date/time string");
+      }
+      if (scheduledStartTime <= new Date()) {
+        throw new HttpError(400, "VALIDATION_ERROR", "scheduled_start_time must be a future time");
+      }
+      finalDelaySeconds = null;
+    }
+  } else {
+    if (scheduled_delay_seconds !== null || scheduled_start_time !== null) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds and scheduled_start_time are only valid in scheduled mode");
     }
   }
 
@@ -58,14 +89,6 @@ router.post("/batches", asyncHandler(async (req, res) => {
   );
   if (raceCheckResult.rows[0].total > 0) throw new HttpError(409, "CONFLICT", "Dryer now has a running batch (concurrent request)");
 
-  // Calculate scheduled_start_time if scheduled_delay_seconds is provided and > 0
-  let scheduledStartTime = null;
-  let finalDelaySeconds = scheduled_delay_seconds;
-  if (operation_mode === 'scheduled' && scheduled_delay_seconds && scheduled_delay_seconds > 0) {
-    // scheduled_start_time = NOW() + scheduled_delay_seconds
-    scheduledStartTime = new Date(Date.now() + scheduled_delay_seconds * 1000);
-  }
-
   const result = await query(
     `INSERT INTO batch (status, operation_mode, threshold_enabled, is_customize, scheduled_delay_seconds, scheduled_start_time, dry_id, fruit_id, recipe_id, app_user_id)
      VALUES ('pending', $1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -73,6 +96,66 @@ router.post("/batches", asyncHandler(async (req, res) => {
     [operation_mode, Boolean(threshold_enabled), Boolean(is_customize), finalDelaySeconds, scheduledStartTime, Number(dry_id), Number(fruit_id), Number(recipe_id), req.user.id]
   );
   return res.status(201).json({ status: "success", data: result.rows[0] });
+}));
+
+router.patch("/batches/:id/schedule", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const { scheduled_delay_seconds = null, scheduled_start_time = null } = req.body;
+  const hasDelay = scheduled_delay_seconds !== null && scheduled_delay_seconds !== undefined;
+  const hasTime = scheduled_start_time !== null && scheduled_start_time !== undefined;
+
+  if (!hasDelay && !hasTime) {
+    throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds or scheduled_start_time is required");
+  }
+  if (hasDelay && hasTime) {
+    throw new HttpError(400, "VALIDATION_ERROR", "Cannot specify both scheduled_delay_seconds and scheduled_start_time");
+  }
+
+  const batchResult = await query(
+    `SELECT batch_id, status, operation_mode, dry_id
+     FROM batch WHERE batch_id = $1`,
+    [batchId]
+  );
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+  if (batch.operation_mode !== "scheduled") {
+    throw new HttpError(422, "BUSINESS_RULE_VIOLATION", "Only scheduled batches can be rescheduled");
+  }
+  if (batch.status !== "pending") {
+    throw new HttpError(409, "CONFLICT", "Only pending scheduled batches can be updated");
+  }
+
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+
+  let finalDelaySeconds = null;
+  let scheduledStartTime = null;
+
+  if (hasDelay) {
+    if (typeof scheduled_delay_seconds !== 'number' || scheduled_delay_seconds <= 0) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_delay_seconds must be a positive number");
+    }
+    finalDelaySeconds = scheduled_delay_seconds;
+    scheduledStartTime = new Date(Date.now() + scheduled_delay_seconds * 1000);
+  }
+
+  if (hasTime) {
+    scheduledStartTime = new Date(scheduled_start_time);
+    if (Number.isNaN(scheduledStartTime.getTime())) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_start_time must be a valid date/time string");
+    }
+    if (scheduledStartTime <= new Date()) {
+      throw new HttpError(400, "VALIDATION_ERROR", "scheduled_start_time must be a future time");
+    }
+    finalDelaySeconds = null;
+  }
+
+  await query(
+    `UPDATE batch SET scheduled_delay_seconds = $1, scheduled_start_time = $2 WHERE batch_id = $3`,
+    [finalDelaySeconds, scheduledStartTime, batchId]
+  );
+
+  return ok(res, { batch_id: batchId, scheduled_delay_seconds: finalDelaySeconds, scheduled_start_time: scheduledStartTime });
 }));
 
 router.get("/batches", asyncHandler(async (req, res) => {
@@ -204,7 +287,7 @@ router.post("/batches/:id/pause", asyncHandler(async (req, res) => {
   }
 
   await query(`UPDATE batch SET status = 'paused', elapsed_seconds = COALESCE(elapsed_seconds, 0) + FLOOR(EXTRACT(EPOCH FROM NOW() - start_time))::int, start_time = NULL WHERE batch_id = $1`, [batchId]);
-  await query(`UPDATE Dryer SET status = 'Running' WHERE dry_id = $1`, [batch.dry_id]);
+  await query(`UPDATE Dryer SET status = 'Stopped' WHERE dry_id = $1`, [batch.dry_id]);
   await writeLog({ logStyle: "batch_pause", message: `Batch ${batchId} paused`, batchId, appUserId: req.user.id });
   return ok(res, { message: "Batch paused" });
 }));
@@ -248,37 +331,20 @@ router.post("/batches/:id/abort", asyncHandler(async (req, res) => {
   if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
   const allowed = await ensureDryerAccess(req.user, batch.dry_id);
   if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
-  if (["completed", "cancelled", "aborted"].includes(batch.status)) {
+  if (["completed", "aborted"].includes(batch.status)) {
     throw new HttpError(409, "CONFLICT", "Cannot abort a batch that is already finished");
   }
 
-  await query(`UPDATE batch SET status = 'cancelled', end_time = NOW() WHERE batch_id = $1`, [batchId]);
+  await query(`UPDATE batch SET status = 'aborted', end_time = NOW() WHERE batch_id = $1`, [batchId]);
   await query(`UPDATE Dryer SET status = 'Idle' WHERE dry_id = $1`, [batch.dry_id]);
   await writeLog({ logStyle: "batch_abort", message: `Batch ${batchId} aborted`, batchId, appUserId: req.user.id });
   return ok(res, { message: "Batch aborted" });
 }));
 
-router.post("/batches/:id/cancel", asyncHandler(async (req, res) => {
-  const batchId = Number(req.params.id);
-  const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
-  const batch = batchResult.rows[0];
-  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
-  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
-  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
-  if (["completed", "cancelled", "aborted"].includes(batch.status)) {
-    throw new HttpError(409, "CONFLICT", "Cannot cancel a batch that is already finished");
-  }
-
-  await query(`UPDATE batch SET status = 'cancelled', end_time = NOW() WHERE batch_id = $1`, [batchId]);
-  await query(`UPDATE Dryer SET status = 'Idle' WHERE dry_id = $1`, [batch.dry_id]);
-  await writeLog({ logStyle: "batch_abort", message: `Batch ${batchId} cancelled`, batchId, appUserId: req.user.id });
-  return ok(res, { message: "Batch cancelled" });
-}));
-
 router.post("/batches/:id/stop", asyncHandler(async (req, res) => {
   const batchId = Number(req.params.id);
   const finalStatus = req.body.final_status;
-  ensureEnum(finalStatus, ["completed", "cancelled"], "final_status");
+  ensureEnum(finalStatus, ["completed", "aborted"], "final_status");
   const batchResult = await query(`SELECT batch_id, status, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
   const batch = batchResult.rows[0];
   if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");

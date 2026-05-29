@@ -93,6 +93,21 @@
             }
           }
         }
+        ,
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "auth", "logout"]
+            }
+          }
+        }
       ]
     },
     {
@@ -139,6 +154,90 @@
               "host": ["{{baseUrl}}"],
               "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}"]
             }
+          }
+        },
+        {
+          "name": "POST /api/v1/areas",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"area_name\": \"Area 1\"\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/areas", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "areas"] }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/areas/{{areaId}}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"area_name\": \"New name\"\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/areas/{{areaId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "areas", "{{areaId}}"] }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/areas/{{areaId}}",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/areas/{{areaId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "areas", "{{areaId}}"] }
+          }
+        },
+        {
+          "name": "POST /api/v1/dryers",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"dryer_name\": \"Dryer 1\",\n  \"area_id\": {{areaId}}\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/dryers", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "dryers"] }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/dryers/{{dryerId}}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"dryer_name\": \"New Dryer\"\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/dryers/{{dryerId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}"] }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/dryers/{{dryerId}}",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/dryers/{{dryerId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}"] }
+          }
+        },
+        {
+          "name": "POST /api/v1/dryers/{{dryerId}}/sensors",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"sensor_type\": \"temperature\",\n  \"threshold\": 1.5\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/dryers/{{dryerId}}/sensors", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}", "sensors"] }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/sensors/{{sensorId}}",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/sensors/{{sensorId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "sensors", "{{sensorId}}"] }
           }
         }
       ]
@@ -196,6 +295,76 @@
               "host": ["{{baseUrl}}"],
               "path": ["{{apiPrefix}}", "controls", "{{controlId}}"]
             }
+          }
+        }
+        ,
+        {
+          "name": "GET /api/v1/device/sensors",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/sensors", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "sensors"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/device/sensors/{{sensorId}}",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/sensors/{{sensorId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "sensors", "{{sensorId}}"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/device/sensors/{{sensorId}}/data",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/sensors/{{sensorId}}/data", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "sensors", "{{sensorId}}", "data"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/controls",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/controls", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "controls"] }
+          }
+        },
+        {
+          "name": "GET /api/v1/controls/{{controlId}}",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/controls/{{controlId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "controls", "{{controlId}}"] }
+          }
+        },
+        {
+          "name": "POST /api/v1/dryers/{{dryerId}}/controls",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"control_name\": \"Fan 1\",\n  \"control_type\": \"fan\"\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/dryers/{{dryerId}}/controls", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "dryers", "{{dryerId}}", "controls"] }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/controls/{{controlId}}",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/controls/{{controlId}}", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "controls", "{{controlId}}"] }
+          }
+        },
+        {
+          "name": "POST /api/v1/controls/{{controlId}}/execute",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"action_type\": \"activate\"\n}" },
+            "url": { "raw": "{{baseUrl}}{{apiPrefix}}/controls/{{controlId}}/execute", "host": ["{{baseUrl}}"], "path": ["{{apiPrefix}}", "controls", "{{controlId}}", "execute"] }
           }
         }
       ]
@@ -348,6 +517,153 @@
               "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/stop",
               "host": ["{{baseUrl}}"],
               "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "stop"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/batches",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/batches/{{batchId}}",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/pause",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/pause",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "pause"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/resume",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "resume"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/abort",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/abort",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "abort"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/toggle-threshold",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold_enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/toggle-threshold",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "toggle-threshold"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/controls/{{controlId}}/commands",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action_type\": \"activate\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/controls/{{controlId}}/commands",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "controls", "{{controlId}}", "commands"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /api/v1/batches/{{batchId}}/schedule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduled_delay_seconds\": 3600\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "schedule"]
+            }
+          }
+        }
+        ,
+        {
+          "name": "PATCH /api/v1/policies/{{policyId}}/conditions/{{conditionId}}",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sensor_id\": 2,\n  \"value\": 90,\n  \"cp_operator\": \">=\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}/conditions/{{conditionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "policies", "{{policyId}}", "conditions", "{{conditionId}}"]
             }
           }
         }

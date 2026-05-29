@@ -206,7 +206,7 @@ Hệ thống ghi lại toàn bộ hoạt động:
 - Biểu đồ đường theo thời gian: nhiệt độ, độ ẩm theo từng mẻ hoặc từng máy.
 - Biểu đồ trạng thái thiết bị output: thời lượng bật/tắt của từng quạt, đèn.
 - Biểu đồ cột: sản lượng mẻ theo loại trái cây, theo khu vực, theo máy.
-- Biểu đồ tròn hoặc stacked bar: phân bổ trạng thái mẻ (running/completed/cancelled/error).
+- Biểu đồ tròn hoặc stacked bar: phân bổ trạng thái mẻ (running/completed/aborted/error).
 - Heatmap hoặc bảng màu cảnh báo: tần suất vượt ngưỡng theo khung giờ.
 
 ### 11.3. Danh mục report
