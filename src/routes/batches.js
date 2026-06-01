@@ -373,6 +373,176 @@ router.post("/batches/:id/toggle-threshold", asyncHandler(async (req, res) => {
   return ok(res, { message: "Threshold option updated", threshold_enabled: boolValue });
 }));
 
+router.patch("/batches/:id/threshold-condition", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const { sensor_id, threshold_value, cp_operator } = req.body;
+
+  if (sensor_id == null || threshold_value == null || !cp_operator) {
+    throw new HttpError(400, "VALIDATION_ERROR", "sensor_id, threshold_value, and cp_operator are required");
+  }
+
+  ensureEnum(cp_operator, [">", "<", ">=", "<=", "="], "cp_operator");
+
+  const batchResult = await query(`SELECT batch_id, dry_id, recipe_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+
+  const sensorResult = await query(
+    `SELECT sensor_id FROM sensor_device WHERE sensor_id = $1 AND dry_id = $2`,
+    [Number(sensor_id), batch.dry_id]
+  );
+  if (!sensorResult.rows.length) {
+    throw new HttpError(404, "NOT_FOUND", "Sensor not found in this dryer");
+  }
+
+  // Check if policy exists for this batch, if not create one
+  const phaseResult = await query(
+    `SELECT phase_id FROM phase WHERE recipe_id = $1 LIMIT 1`,
+    [batch.recipe_id]
+  );
+
+  if (!phaseResult.rows.length) {
+    throw new HttpError(409, "CONFLICT", "Batch recipe has no phases");
+  }
+
+  const phaseId = phaseResult.rows[0].phase_id;
+
+  const policyResult = await query(
+    `SELECT policy_id FROM policy WHERE phase_id = $1 LIMIT 1`,
+    [phaseId]
+  );
+
+  let policyId;
+  if (policyResult.rows.length) {
+    policyId = policyResult.rows[0].policy_id;
+  } else {
+    // Create a new policy
+    const newPolicy = await query(
+      `INSERT INTO policy (policy_type, policy_name, phase_id, is_active) 
+       VALUES ('threshold_condition', 'Threshold Policy for Batch ' || $1, $2, TRUE)
+       RETURNING policy_id`,
+      [batchId, phaseId]
+    );
+    policyId = newPolicy.rows[0].policy_id;
+  }
+
+  // Check if condition exists for this sensor, if yes update, if no create
+  const conditionResult = await query(
+    `SELECT condition_id FROM policy_condition WHERE policy_id = $1 AND sensor_id = $2`,
+    [policyId, Number(sensor_id)]
+  );
+
+  let conditionId;
+  if (conditionResult.rows.length) {
+    conditionId = conditionResult.rows[0].condition_id;
+    await query(
+      `UPDATE policy_condition SET value = $1, cp_operator = $2 WHERE condition_id = $3`,
+      [Number(threshold_value), cp_operator, conditionId]
+    );
+  } else {
+    const newCondition = await query(
+      `INSERT INTO policy_condition (policy_id, sensor_id, value, cp_operator)
+       VALUES ($1, $2, $3, $4)
+       RETURNING condition_id`,
+      [policyId, Number(sensor_id), Number(threshold_value), cp_operator]
+    );
+    conditionId = newCondition.rows[0].condition_id;
+  }
+
+  await writeLog({
+    logStyle: "audit_config_change",
+    message: `Batch ${batchId}: Threshold condition set - Sensor ${sensor_id} ${cp_operator} ${threshold_value}`,
+    batchId,
+    sensorId: Number(sensor_id),
+    appUserId: req.user.id,
+  });
+
+  return ok(res, {
+    message: "Threshold condition configured",
+    policy_id: policyId,
+    condition_id: conditionId,
+    sensor_id: Number(sensor_id),
+    threshold_value: Number(threshold_value),
+    cp_operator,
+  });
+}));
+
+router.post("/batches/:id/threshold-actions", asyncHandler(async (req, res) => {
+  const batchId = Number(req.params.id);
+  const { condition_id, actions } = req.body;
+
+  if (condition_id == null || !Array.isArray(actions) || !actions.length) {
+    throw new HttpError(400, "VALIDATION_ERROR", "condition_id and actions array are required");
+  }
+
+  for (const action of actions) {
+    if (action.control_id == null || !action.action_type) {
+      throw new HttpError(400, "VALIDATION_ERROR", "Each action must have control_id and action_type");
+    }
+    ensureEnum(action.action_type, ["activate", "deactivate"], "action_type");
+  }
+
+  const batchResult = await query(`SELECT batch_id, dry_id FROM batch WHERE batch_id = $1`, [batchId]);
+  const batch = batchResult.rows[0];
+  if (!batch) throw new HttpError(404, "NOT_FOUND", "Batch not found");
+
+  const allowed = await ensureDryerAccess(req.user, batch.dry_id);
+  if (!allowed) throw new HttpError(403, "FORBIDDEN", "No access to batch");
+
+  // Verify condition exists
+  const conditionResult = await query(
+    `SELECT pc.condition_id, pc.policy_id FROM policy_condition pc
+     WHERE pc.condition_id = $1`,
+    [Number(condition_id)]
+  );
+  if (!conditionResult.rows.length) {
+    throw new HttpError(404, "NOT_FOUND", "Condition not found");
+  }
+
+  const policyId = conditionResult.rows[0].policy_id;
+
+  // Delete existing actions for this policy
+  await query(`DELETE FROM policy_action WHERE policy_id = $1`, [policyId]);
+
+  const createdActions = [];
+
+  // Create new actions
+  for (const action of actions) {
+    // Verify control exists in this dryer
+    const controlResult = await query(
+      `SELECT control_id FROM control_device WHERE control_id = $1 AND dry_id = $2`,
+      [Number(action.control_id), batch.dry_id]
+    );
+    if (!controlResult.rows.length) {
+      throw new HttpError(404, "NOT_FOUND", `Control ${action.control_id} not found in this dryer`);
+    }
+
+    const newAction = await query(
+      `INSERT INTO policy_action (policy_id, control_id, action_type)
+       VALUES ($1, $2, $3)
+       RETURNING action_id, control_id, action_type`,
+      [policyId, Number(action.control_id), action.action_type]
+    );
+    createdActions.push(newAction.rows[0]);
+  }
+
+  await writeLog({
+    logStyle: "audit_config_change",
+    message: `Batch ${batchId}: Threshold actions configured - ${createdActions.length} action(s) set`,
+    batchId,
+    appUserId: req.user.id,
+  });
+
+  return ok(res, {
+    message: "Threshold actions configured",
+    policy_id: policyId,
+    actions: createdActions,
+  });
+}));
+
 router.post("/batches/:id/controls/:controlId/commands", asyncHandler(async (req, res) => {
   const batchId = Number(req.params.id);
   const controlId = Number(req.params.controlId);

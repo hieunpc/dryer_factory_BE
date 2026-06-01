@@ -666,6 +666,44 @@
               "path": ["{{apiPrefix}}", "policies", "{{policyId}}", "conditions", "{{conditionId}}"]
             }
           }
+        },
+        {
+          "name": "PATCH /api/v1/batches/{{batchId}}/threshold-condition",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sensor_id\": 2,\n  \"threshold_value\": 85,\n  \"cp_operator\": \">\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/threshold-condition",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "threshold-condition"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/batches/{{batchId}}/threshold-actions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"condition_id\": 1,\n  \"actions\": [\n    {\n      \"control_id\": 1,\n      \"action_type\": \"activate\"\n    },\n    {\n      \"control_id\": 2,\n      \"action_type\": \"deactivate\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/batches/{{batchId}}/threshold-actions",
+              "host": ["{{baseUrl}}"],
+              "path": ["{{apiPrefix}}", "batches", "{{batchId}}", "threshold-actions"]
+            }
+          }
         }
       ]
     },
